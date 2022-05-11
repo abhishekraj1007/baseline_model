@@ -313,7 +313,19 @@ def Item_purchased_Together_statewise(df,state):
 
     return pairs
 
+
+def model_fn(orders_filename):
+    users_filename, id2product = pre_process(orders_filename)
     
+    get_sim(users_filename)
+    sim = pd.read_csv('sim.csv', index_col = 0, header = 0)
+    users = pd.read_csv('users.csv', index_col = 0, header = 0)
+    
+    avg_item_ratings = users.mean(axis = 0)
+    
+    base_url = 'https://leaclothingco.com/products/'
+    
+    return  sim, users, avg_item_ratings, id2product, base_url
 
     
 
