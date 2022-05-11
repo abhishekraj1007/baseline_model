@@ -39,8 +39,8 @@ def model_fn(orders_filename):
     return  sim, users, avg_item_ratings, id2product, base_url
 
 
+sim, users, avg_item_ratings, id2product, base_url = model_fn(orders_filename = 'orders_export_1.csv')
 if __name__ == '__main__':
-    global sim, users, avg_item_ratings, id2product, base_url
-    sim, users, avg_item_ratings, id2product, base_url = model_fn(orders_filename = 'orders_export_1.csv')
+    # sim, users, avg_item_ratings, id2product, base_url = model_fn(orders_filename = 'orders_export_1.csv')
     app.run(port=5000, debug=False)
     
