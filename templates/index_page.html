@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lea Clothing Co.</title>
+</head>
+
+<body>
+    <h1>Lea Clothing Co.</h1>
+    <form action="{{ url_for('predict')}}" method="post">
+        
+        <div class="mb-3">
+            <label class="form-label" for="email">Email</label>
+            <input type="email" class="form-control" name="email" placeholder="Enter user email">
+        </div>
+
+	<div class="mb-3">
+            <label class="form-label" for="product_id">Product_Id</label>
+            <input type="number" class="form-control" name="product_id" placeholder="Enter numeric product_id" required>
+        </div>
+	<br>
+        <button type="submit" class="btn btn-primary">Predict</button>
+    </form>
+
+	<br>
+
+    {% for text in prediction_text %}
+	<a href = {{ text}} > {{ text}} </a><br>
+	{% endfor %}
+
+
+</body>
+
+</html>
