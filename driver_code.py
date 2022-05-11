@@ -1,10 +1,10 @@
-from helper_code import pre_process, get_sim, get_inference, get_similar_desc, get_demographic_recos
+from helper_code import pre_process, get_sim, get_inference
 import pandas as pd
 from flask import Flask, render_template , request
 import pickle
 import flask
 app = Flask(__name__)
-base_url = 'https://leaclothingco.com/products/'
+# base_url = 'https://leaclothingco.com/products/'
 
 
 
@@ -40,6 +40,7 @@ def model_fn(orders_filename):
 
 
 if __name__ == '__main__':
+    global sim, users, avg_item_ratings, id2product, base_url
     sim, users, avg_item_ratings, id2product, base_url = model_fn(orders_filename = 'orders_export_1.csv')
     app.run(port=5000, debug=False)
     
