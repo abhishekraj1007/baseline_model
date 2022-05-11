@@ -1,1 +1,1 @@
-web: gunicorn app:driver_code.py
+web: gunicorn driver_code:app
