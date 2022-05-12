@@ -18,13 +18,20 @@ def index():
 @app.route('/predict',methods=['POST'])
 def predict():
     data = dict(request.form)
-#     user_id = [x for x in request.form.values()]
-    print(f"Recommendations for the product: {base_url + id2product[ int( data['product_id'] ) ] }")
-    res = get_inference(data['email'], int(data['product_id']), sim, users, avg_item_ratings, id2product)
-#     print(*res,sep='\n')
-    return render_template("index_page.html", prediction_text=res)
+    if  int(data['product_id']) <= int(sim.index[-1]):
+        print(f"Recommendations for the product: {base_url + id2product[ int( data['product_id'] ) ] }")
+        res = get_inference(data['email'], int(data['product_id']), sim, users, avg_item_ratings, id2product)
+    #     print(*res,sep='\n')
+        return render_template("index_page.html", prediction_text=res)
+    else:
+        return render_template("index_page.html", prediction_text=[])
 
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=False)
+    while True:
+        try:
+            app.run(port=5000, debug=False)
+        except Exception as e:
+            print('Code crashed once due to:\n{e}')
+            continue
     
