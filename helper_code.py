@@ -307,9 +307,6 @@ def create_product_tags_arr(filename = 'products_export_1.csv'):
     """
     products = pd.read_csv(filename)
     
-<<<<<<< HEAD
-    return  sim, users, avg_item_ratings, id2product, base_url
-=======
     #dropping duplicates
     products.drop_duplicates(subset='Title', keep="first", inplace= True)
     products.dropna(subset=['Title','Tags'], inplace = True)
@@ -484,4 +481,3 @@ def model_fn_2(products_filename):
 
 
 
->>>>>>> 797bdd44df71dd6d498151e3b1036f691ee6b4bc
