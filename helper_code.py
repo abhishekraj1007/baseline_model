@@ -1,3 +1,7 @@
+##Things to test: Test process_product_name for correct conversions, check if the style matching criteria is correct.
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -7,35 +11,19 @@ from random import choices
 from nltk.tokenize import word_tokenize
 import string
 import pickle
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
+from sklearn.metrics.pairwise import cosine_similarity
+import os
+import pymongo
 base_url = 'https://leaclothingco.com/products/'
 
-
-def process_product_name(string):
-    #splitting to get original string
-    string = string.split(' - ')[0].strip().split()
-    new_string = []
-    for part in string:
-        if not part[0].isalnum():
-            if not part[-1].isalnum():
-                res = part[1:-1]
-            else:
-                res = part[1:]
-        elif not part[-1].isalnum():
-            res = part[:-1]
-        else:
-            res = part
-        if res!='':
-            new_string.append(res.lower())
-    return '-'.join(new_string)
-
-# process_product_name('REINA BLACK MESH + LACE BUSTIER CORSET TOP - Regular/Xs')
+db_name = 'lea_clothing_backend'
+collection_name = 'processed_user_profiles'
 
 
-def pre_process(filename = 'orders_export_1.csv'):
+
+def pre_process(orders_filename = 'orders_export_1.csv', products_filename = 'products_export_1.csv'):
     #Read Orders file
-    orders = pd.read_csv(filename)
+    orders = pd.read_csv(orders_filename)
 
     #changing column names for convenience
     cols = orders.columns
@@ -47,43 +35,39 @@ def pre_process(filename = 'orders_export_1.csv'):
     orders = pd.merge(orders, map1, on='Name', suffixes=('_old', ''))
     map2 = orders.dropna(subset=['FulfillmentStatus'])[['Name','FulfillmentStatus']]
     orders = pd.merge(orders, map2, on='Name', suffixes=('_old', ''))
+    
 
+    products = pd.read_csv(products_filename)
+    #dropping duplicates
+    products.drop_duplicates(subset='Title', keep="first", inplace= True)
+
+    products = products[['Handle','Title']]
+    products.dropna(subset=['Title'], inplace = True)
+    products.reset_index(inplace=True, drop = True)
+
+    # finally creating mappings title -> handle and handle -> title
+    handle2title = dict(zip(products.Handle, products.Title))
+    title2handle = dict(zip(products.Title, products.Handle))
+
+    ## creating product list for filtering
+    products_title_list = products.Title.dropna().unique()
+    products_handle_list = products.Handle.dropna().unique()
+        
+    #processing product names(Handle- Title conflicts)
+    orders.LineitemName = orders.LineitemName.apply(lambda x: x.split(' - ')[0].strip())
+    
+    #removing outdated products
+    orders = orders.loc[orders.LineitemName.isin(products_title_list)]
+    
+    # converting product Titles to their Handles
+    orders.LineitemName = orders.LineitemName.map(title2handle)
+    
+    #saving orders for further use
+    orders.to_csv('orders_export_processed.csv', index = False)
+    
     # Selecting required columns
     req = ['Name', 'Email','LineitemName','LineitemFulfillmentStatus','FinancialStatus','FulfillmentStatus']
     orders = orders[req]
-
-
-    ## creating product list for filtering
-    products = pd.read_csv('products_export.csv')
-
-    products_list = products.Handle.dropna().unique()
-    print(len(products_list))
-
-    # finally creating mappings
-    product2id = dict( (b,a) for a,b in enumerate(products_list) )
-    id2product = dict(enumerate(products_list))
-    
-        
-    #processing product names(Handle- Title conflicts)
-    orders.LineitemName = orders.LineitemName.apply(process_product_name)
-    
-    # correcting some errors in data
-    temp_mappings = {'carla-mauve-silk-corset-top':'carla-mauve-silk-mesh-corset-top',
-                 'twyla-mesh-corset-t-shirt':'twyla-black-mesh-corset-t-shirt',
-                'tatiana-ruched-midi-corset-dress':'tatiana-red-ruched-mesh-midi-corset-dress',
-                'belle-lavender-ombre-ruffle-tulle-corset-dress':'belle-lavender-ombro-ruffle-tulle-corset-dress',
-                'brielle-teddy-wide-leg-pants':'brielle-lavender-teddy-wide-leg-pants',
-                'betty-teddy-long-cardigan':'betty-lavender-teddy-long-cardigan',
-                'brie-teddy-crop-top':'brie-lavender-teddy-crop-top',
-                'aphrodite-embroidered-gown-skirt':'aphrodite-embroidered-sheer-gown-skirt'}
-    
-    old_mappings = dict(zip(orders.LineitemName, orders.LineitemName))
-    for key,value in temp_mappings.items():
-        old_mappings[key] = value
-    orders.LineitemName = orders.LineitemName.map(old_mappings)
-    
-    #removing outdated products
-    orders = orders.loc[orders.LineitemName.isin(products_list)]
     
     #selecting carts with two or more products
     order_counts = orders.Name.value_counts()
@@ -92,43 +76,39 @@ def pre_process(filename = 'orders_export_1.csv'):
     # taking 2 or more cart values
     orders = orders.loc[orders.Name.isin(counts_index)]
     
-    # converting products to their ids
-    orders['ProductId'] = orders.LineitemName.map(product2id).astype(int)
+    # converting product Titles to their Handles
+    orders['ProductHandle'] = orders.LineitemName
     
     #scoring user interactions
     rate_dict = {'paid':5, 'pending':4, 'voided':3, 'refunded':1}
     orders['rating'] = orders.FinancialStatus.map(rate_dict)
     
-    orders = orders[['Email', 'ProductId', 'rating']]
+    orders = orders[['Email', 'ProductHandle', 'rating']]
     orders.reset_index(drop=True, inplace=True)
 
-    #preparing for missing ids in training data to avoid errors at inference
-    missing_ids = list(set(range(len(products_list))) - set(orders.ProductId.unique()))
+    #preparing for missing products in training data to avoid errors at inference
+    missing_ids = list(set(products_handle_list) - set(orders.ProductHandle.unique()))
     for pid in missing_ids:
         orders.loc[len(orders.index)] = [str(pid) +'@Dummy', pid, 5]
     
     # pivoting tables for training data
-    orders = orders.pivot_table('rating',['Email'],'ProductId')
+    orders = orders.pivot_table('rating',['Email'],'ProductHandle')
     orders.fillna(0, inplace = True)
     
     #writing users(orders) to disk
     print('Processing finished, writing users to disk...\n')
     out_filename = 'users.csv'
     orders.to_csv(out_filename, index = True)
-    return out_filename, id2product
-    
+    return out_filename, title2handle    
     
 def get_sim(filename = 'users.csv'):
     orders = pd.read_csv(filename, header = 0, index_col = 0)
-    print(orders.isna().sum().sum())
     
     ids = list(orders.columns)
     idx_to_ids = dict(enumerate(ids))
     ids_to_idx = dict([(y,x) for x,y in idx_to_ids.items()])
 
-
     sim = np.zeros((len(ids),len(ids)))
-    
     
     #Making correlation matrix using ADJUSTED COSINE SIMILARITY
 
@@ -158,15 +138,16 @@ def get_sim(filename = 'users.csv'):
     sim.to_csv('sim.csv', index = True)
     
     
-def get_inference(email, product_id, sim, users, avg_item_ratings, id2product, reco_count = 10):
-        
+def get_inference(email, product_title, sim, users, avg_item_ratings, title2handle, tag_array, connection, reco_count = 10):
+    
+    product_handle = title2handle[product_title]
+    
     if email in users.index:
         print('Found existing user...')
 #         print('Entered part 1\n')
         temp_user = users.loc[email]
         #Assume customer likes/Bought this product
-        temp_user.loc[str(product_id)] = 5.0
-        
+        temp_user.loc[product_handle] = 5.0
         
         #Normalizing the rating scale by subtracting average ratings by users
         r_u_j = temp_user.values - avg_item_ratings.values
@@ -178,7 +159,7 @@ def get_inference(email, product_id, sim, users, avg_item_ratings, id2product, r
         res = []
         for item in temp_user.index.values:
             #Skip items which are already bought or the item i.e. currently viewed
-            if temp_user.loc[item]>=5 or item == product_id:
+            if temp_user.loc[item]>=5 or item == product_handle:
                 continue
 
             sim_i = sim.loc[:,item].values
@@ -193,7 +174,7 @@ def get_inference(email, product_id, sim, users, avg_item_ratings, id2product, r
         
         results = []
         for product,score in res[:reco_count]:
-            prod_url = base_url + id2product[int(product)]
+            prod_url = base_url + product
 #             print(prod_url)
             results.append(prod_url)
         return results
@@ -201,40 +182,45 @@ def get_inference(email, product_id, sim, users, avg_item_ratings, id2product, r
     else:
         # Demographics Based
         #2a Explore User Profile
-        print('Found new user...')
+        print('Customer order history not found...')
         try:
-#             print('Entered part 2\n')
             cust = pd.read_csv('customers_export.csv')
-            province = cust.loc[cust.Email == 'neelam.madnani98@gmail.co','Province'].values[0]
+            province = cust.loc[cust.Email == email,'Province'].values[0]
+            part2 = get_demographic_recos(product_handle, ShippingProvinceName = province, orders_filename = 'orders_export_processed.csv')
         except Exception as e:
-            #Check the Demographics table for available user info
-            province = get_demographics(email)
-            
-        if province != -1:
-            part2 = set(get_demographic_recos(product_id, id2product, ShippingProvinceName = province, orders_filename = 'orders_export_1.csv'))
-        else:
-            print('user profile unavailable,.. sending popup..\n')
-            part2 = set()
+            part2 = []
+        
+#         2b show content based recos
+#         print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
+        part3 = sim.loc[:,product_handle].sort_values(ascending = False)[1:reco_count+1].index.to_list()
         
         
-        #2b show content based recos
-#         print('Entered part 3\n')
-        part3 = set( list( map(id2product.get, [int(item) for item in sim.loc[product_id,:].nlargest(reco_count+1).index[1:]]) )  )
-#         res = sim.loc[:,str(product_id)].sort_values(ascending = False)[1:reco_count+1]
-        
-    
-    
         #2c get_similar descriptions based products
-#         print('Entered part 4\n')
-        part4 = set( get_similar_desc(product_id, mapping = id2product) )
-#         print(part2, part3, part4, sep = '\n')
+        part4 = get_similar_desc(product_handle)
+        
+        #2d get_tag_based_personalized recommendations else show similar tag based products
+        #Pending, to be done through Database
+        try:
+            #fetching user attributes from mongodb
+            tag_profile = get_user_tag_profile(connection, email, tag_array.columns)
+            print(f'Found tag profile: {email}')
+            part5 = get_tag_based_inference(tag_profile , tag_array , title2handle, standalone = True, n_recos = 15)
+            
+        except Exception as e:
+            print(f'User tag profile not found, {e}\n')
+            #pending
+            tag_profile = tag_array.loc[tag_array.index == product_handle ].iloc[-1,:]
+            part5 = get_tag_based_inference(tag_profile, tag_array , title2handle, standalone = True, n_recos = 15)[1:]
+    
+#         #print output and verify results
+        print(f'Part2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
         
         # sampling recommendations based on priority based function
         # The three position for weights represent prob dist for selection from each arr
-        Model_weights = [1, 1.5, 1]
-        results = weighted_sample_without_replacement( arrs= [ part2, part3, part4 ], weight_each_arr = Model_weights, k=reco_count)
+        Model_weights = [1, 1.5, 1, 1]
+        results = weighted_sample_without_replacement( arrs= [ part2, part3, part4, part5 ], weight_each_arr = Model_weights, k=reco_count)
         return [base_url + item for item in results]
-    
+        
         
 def weighted_sample_without_replacement(arrs, weight_each_arr, k=2):
     population = []
@@ -257,47 +243,24 @@ def weighted_sample_without_replacement(arrs, weight_each_arr, k=2):
     return [population[i] for i in indices]
             
             
-def get_similar_desc(product_id, mapping):
+def get_similar_desc(product_handle):
     sim_desc = pickle.load(open('sim_desc','rb'))
-    product_name = mapping[product_id]
-    
-    return sim_desc[product_name]
+    return sim_desc[product_handle]
         
     
     
-def get_demographic_recos(product_id, mapping, ShippingProvinceName = 'Delhi', orders_filename = 'orders_export_1.csv'):
-    orders = pd.read_csv(orders_filename)
-    
-    df = pre_processing_orders(orders)
+def get_demographic_recos(product_handle, ShippingProvinceName = 'Delhi', orders_filename = 'orders_export_processed.csv'):
+    df = pd.read_csv(orders_filename)
     
     return_dict = Item_purchased_Together_statewise(df,ShippingProvinceName)
     print(f'Demographic results for Location: {ShippingProvinceName} are included')
     
-    product_name = mapping[product_id]
-    res = return_dict.get( product_name, [] )[:5]
+    res = return_dict.get( product_handle, [] )[:5]
     if res:
-        return [base_url + item for item in res]
+        return res
     else:
         print('No demographics data for the product found in the Locality')
-        return []
-    
-    
-def get_demographics(email):
-    
-    # Needs to done through database
-    return 'Delhi'
-    
-    
-    
-def pre_processing_orders(orders):
-    orders = orders.copy()
-    cols = orders.columns
-    cols = [''.join(item.title() for item in entity.split()) for entity in cols]  
-    orders.columns = cols
-    orders.LineitemName = orders.LineitemName.map(process_product_name)
-
-    return orders
-    
+        return []  
     
     
 def Item_purchased_Together_statewise(df,state):
@@ -313,9 +276,9 @@ def Item_purchased_Together_statewise(df,state):
 
     return pairs
 
-
-def model_fn(orders_filename):
-    users_filename, id2product = pre_process(orders_filename)
+    
+def model_fn(orders_filename, products_filename, tags_filename):
+    users_filename, title2handle = pre_process(orders_filename, products_filename)
     
     get_sim(users_filename)
     sim = pd.read_csv('sim.csv', index_col = 0, header = 0)
@@ -324,5 +287,201 @@ def model_fn(orders_filename):
     avg_item_ratings = users.mean(axis = 0)
     
     base_url = 'https://leaclothingco.com/products/'
+    try:
+        productsXtags = pd.read_csv(tags_filename, header = 0, index_col = 0)
+    except Exception as e:
+        print(f'Products tag file cant be read: {e}')
+        productsXtags = -1    
+
+    return  sim, users, avg_item_ratings, title2handle, base_url, productsXtags
+
+
+###############################################################
+###############################################################
+#API 2
+
+
+def create_product_tags_arr(filename = 'products_export_1.csv'):
+    """
+    To create products X tags array to be used for matrix multiplication for cosine similarity afterwards
+    """
+    products = pd.read_csv(filename)
     
+<<<<<<< HEAD
     return  sim, users, avg_item_ratings, id2product, base_url
+=======
+    #dropping duplicates
+    products.drop_duplicates(subset='Title', keep="first", inplace= True)
+    products.dropna(subset=['Title','Tags'], inplace = True)
+    products.reset_index(inplace=True, drop = True)
+    title2handle = dict(zip(products.Title, products.Handle))
+    print(products.shape)
+    
+    products = products[['Handle','Tags']]
+
+    products.Tags = products.Tags.apply(lambda x: x.split(', '))
+    products = products.explode('Tags')
+    products.Tags = products.Tags.apply(lambda x: ''.join( item.lower() for item in x.replace('-','').split() ))
+    products['count'] = 1
+
+    products = products.pivot_table('count', ['Handle'],'Tags')
+    products.fillna(0, inplace = True)
+    
+    processed_filename = 'productsXtags.csv'
+    products.to_csv(processed_filename, header = True, index = True)
+    return processed_filename, title2handle
+
+
+def create_profile(data, productsXtags_arr):
+    """
+    function to process raw json into useful user profile
+    """
+    
+    # a slightly smaller weight is assigned to filter tags
+    uncomfortable_dict = {'Arms':{'Sleeves':1}, 'Waist':{'High Waist':1, 'Skater':1, 'Shift':1, 'Slip':1, "Bodycon":-0.1, "Crop Top":-0.1},
+                         'Legs': {'Midi':1, 'Gown':1, 'Pants':1, 'Maxi':1, 'Gown':1},
+                         'Back':{'Backless':-0.1},
+                         'Collarbones':{"Off-Shoulder":-1, "Strapless":-0.1}}
+    
+    #Questions and corresponding weights of thier tags
+    body_tags = {'Bodies':2, 'accentuate':4, 'uncomfortable': 4, 'height':1, 'colour palettes':2,
+                'prints':2,'occasion':5}
+    
+    tags = dict()
+    for item,weight in body_tags.items():
+        if item!='uncomfortable':
+            values = data.get(item, [])
+            if values:
+                values = values['value']
+            
+            if isinstance(values, list):
+                temp = []
+                for value in values:
+                    temp.extend(value.split(', '))
+            else:
+                temp = [values]
+                
+#             print('temp',temp)
+            tags.update(dict( (
+                ''.join( item.lower() for item in tag.replace('-','').split() ),weight) for tag in temp ))
+            
+#             print(tags)
+        else:
+            values = data.get(item, [])
+            if values:
+                values = values['value']
+                
+            for tag in values:
+                value = uncomfortable_dict[tag]
+                
+                tags.update(dict( (
+                    ''.join( item.lower() for item in key.replace('-','').split() ), value * weight) for key,value in value.items() ))
+#             print('uncomfortable', values, tags)
+    tag_profile = pd.Series(tags, index = list(productsXtags_arr.columns))
+    tag_profile.fillna(0, inplace= True)
+    return tag_profile
+
+
+def get_tags_sim(tag_profile, tag_array, n):
+    """
+    Function to fetch n most similar indices based on 1d array and another 2d array
+    """
+    
+    #notice that order has been reversed
+    ids = (-cosine_similarity( tag_array, [tag_profile])).argsort(axis = 0)[:n].flatten()
+    
+#     print(cosine_similarity( tag_array, [tag_profile]) , cosine_similarity( tag_array, [tag_profile]).argsort(axis = 0).flatten()[:-n:-1] , ids)
+    
+    return tag_array.index[ids].tolist()
+
+    
+def get_tag_based_inference(tag_profile, tag_array, title2handle = None , ids = None, standalone = False, n_recos = 15):
+    
+    """
+    note that product ids must be in list format
+    """    
+    #get actual tag based similar products
+    tag_res = get_tags_sim(tag_profile, tag_array, n = n_recos)
+    
+    if not standalone:
+        if ids:
+            ids = [title2handle[item] for item in ids]
+            #get similar products from the selected product styles by the user on popup page
+            res = []
+            size_each = n_recos//len(ids) + 1
+            for pid in ids:
+#                 print(base_url + pid)
+                tag_profile_temp = tag_array.loc[pid]
+                tag_array_temp = tag_array.loc[tag_res]
+                res.extend( get_tags_sim( tag_profile_temp, tag_array_temp ,  n = size_each) )
+        else:
+            print('No products selected by the popup part')
+            res = []
+            
+        #return both results for displaying
+        return tag_res, list(set(res))
+    else:
+        #return tag based recommendations only
+        return tag_res
+
+
+
+def get_user_tag_profile(connection, email, indices, db_name = 'lea_clothing_backend', collection_name = 'processed_user_profiles'):
+    db = connection[db_name] #change the name of database as per your wish
+    collection = db[collection_name] #change the collection
+    
+    values = collection.find_one({'_id': email})
+    if values:
+        values = values['value']
+        return pd.Series(values, index = indices)
+    else:
+        raise Exception
+
+
+def store_user_mongo_unprocessed(connection, data, email, db_name = 'lea_clothing_backend', collection_name = 'user_profiles'):
+    db = connection[db_name] #change the name of database as per your wish
+    collection = db[collection_name] #change the collection
+    
+    d = dict()
+    d['_id'] = email
+    d.update(data)
+#     d.pop('email')
+    
+    #checking if user already exists in mongodb
+    data = collection.find_one({'_id': email})
+    if data:
+        print(f'\nUser already exists in User_profiles, overwriting...\n')
+        collection.replace_one({'_id': email},d)
+    else:
+        collection.insert_one(d)
+        
+        
+def store_user_mongo(connection, tag_profile, email, db_name = 'lea_clothing_backend', collection_name = 'processed_user_profiles'):
+    db = connection[db_name] #change the name of database as per your wish
+    collection = db[collection_name] #change the collection
+    
+    d = dict()
+    d['_id'] = email
+    d['value'] = tag_profile.tolist()
+    
+    #checking if user already exists in mongodb
+    data = collection.find_one({'_id': email})
+    if data:
+        print(f'User already exists in processed_user_profiles, overwriting...\n')
+        collection.replace_one({'_id': email},d)
+    else:
+        collection.insert_one(d)
+
+
+def model_fn_2(products_filename):
+    processed_filename, title2handle = create_product_tags_arr(products_filename)
+    
+    productsXtags = pd.read_csv(processed_filename, header = 0, index_col = 0)
+    
+    base_url = 'https://leaclothingco.com/products/'
+    
+    return productsXtags, title2handle, base_url
+
+
+
+>>>>>>> 797bdd44df71dd6d498151e3b1036f691ee6b4bc
