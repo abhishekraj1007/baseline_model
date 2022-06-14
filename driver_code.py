@@ -1,5 +1,5 @@
 from helper_code import pre_process, get_sim, get_inference, model_fn
-from helper_code import create_product_tags_arr, create_profile, store_user_mongo, get_tags_sim, get_tag_based_inference, model_fn_2, store_user_mongo, store_user_mongo_unprocessed
+from helper_code import create_product_tags_arr, create_profile, store_user_mongo, get_tags_sim, get_tag_based_inference, model_fn_2, store_user_mongo,store_user_mongo_unprocessed
 
 import os
 import pymongo
@@ -15,18 +15,21 @@ connection = pymongo.MongoClient("mongodb+srv://my_jurisdiction:P9N18hMrpvSWJiEy
 
 
 # Load model 1
-sim, users, avg_item_ratings, title2handle, base_url, tag_array = model_fn(
-    orders_filename='orders_export_1.csv', products_filename='products_export_1.csv', tags_filename='productsXtags.csv')
+sim, users, avg_item_ratings, title2handle, base_url, tag_array = model_fn(orders_filename = 'orders_export_1.csv', products_filename='products_export_1.csv', tags_filename = 'productsXtags.csv')
 
-# Load model 2
-productsXtags, title2handle, base_url = model_fn_2(
-    products_filename='products_export_1.csv')
+#Load model 2
+productsXtags, title2handle, base_url = model_fn_2(products_filename = 'products_export_1.csv')
+
+
+@app.route('/test', methods=['GET'])
+def get_test():
+    return "Success....."
 
 
 # get data from the html form and perform prediction
 @app.route('/recommend',methods=['POST'])
-def predict_1():
-
+def recommend():
+    
     data = request.json
     
     print(f"Recommendations for the product: { base_url + title2handle[ data['product_title'] ] }")
@@ -35,25 +38,25 @@ def predict_1():
     return jsonify( [{'Handle':item, 'URL':base_url + item} for item in res] )
 
 
+    
 # get data from the html form and perform prediction
 @app.route('/personalize',methods=['POST'])
-def predict_2():
+def personalize():
 
     data = request.json
     data = data['finalQuizData']
     email = data['email']['value']
-
-    tag_profile = create_profile(data, productsXtags_arr=productsXtags)
-
-    # Storing Unprocessed data for future in a different collection
-    store_user_mongo_unprocessed(
-        connection, data, email, db_name='lea_clothing_backend', collection_name='user_profiles')
-
-    # Storing processed user profile
-    store_user_mongo(connection, tag_profile, email,
-                     db_name='lea_clothing_backend', collection_name='processed_user_profiles')
-
-    # Getting Ids
+    
+    
+    tag_profile = create_profile(data, productsXtags_arr = productsXtags)
+    
+    #Storing Unprocessed data for future in a different collection
+    store_user_mongo_unprocessed(connection, data, email, db_name = 'lea_clothing_backend', collection_name = 'user_profiles')
+    
+    #Storing processed user profile
+    store_user_mongo(connection, tag_profile, email, db_name = 'lea_clothing_backend', collection_name = 'processed_user_profiles')
+    
+    #Getting Ids
     if data.get('styles', []):
         ids = data['styles']['value']
     else:
@@ -72,3 +75,5 @@ if __name__ == '__main__':
         except Exception as e:
             print('Code crashed once due to:\n{e}')
             continue
+    
+    
