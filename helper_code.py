@@ -10,6 +10,10 @@ from random import choices
 # from nltk.tokenize import word_tokenize
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
+<<<<<<< HEAD
+=======
+import os
+>>>>>>> 797bdd44df71dd6d498151e3b1036f691ee6b4bc
 import pymongo
 base_url = 'https://leaclothingco.com/products/'
 
@@ -17,6 +21,10 @@ db_name = 'lea_clothing_backend'
 collection_name = 'processed_user_profiles'
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 797bdd44df71dd6d498151e3b1036f691ee6b4bc
 def pre_process(orders_filename = 'orders_export_1.csv', products_filename = 'products_export_1.csv'):
     #Read Orders file
     orders = pd.read_csv(orders_filename)
@@ -209,13 +217,21 @@ def get_inference(email, product_title, sim, users, avg_item_ratings, title2hand
             part5 = get_tag_based_inference(tag_profile, tag_array , title2handle, standalone = True, n_recos = 15)[1:]
     
 #         #print output and verify results
+<<<<<<< HEAD
 #         print(f'Part2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
+=======
+        print(f'Part2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
+>>>>>>> 797bdd44df71dd6d498151e3b1036f691ee6b4bc
         
         # sampling recommendations based on priority based function
         # The three position for weights represent prob dist for selection from each arr
         Model_weights = [1, 1.5, 1, 1]
         results = weighted_sample_without_replacement( arrs= [ part2, part3, part4, part5 ], weight_each_arr = Model_weights, k=reco_count)
+<<<<<<< HEAD
         return results
+=======
+        return [base_url + item for item in results]
+>>>>>>> 797bdd44df71dd6d498151e3b1036f691ee6b4bc
         
         
 def weighted_sample_without_replacement(arrs, weight_each_arr, k=2):
@@ -287,7 +303,11 @@ def model_fn(orders_filename, products_filename, tags_filename):
         productsXtags = pd.read_csv(tags_filename, header = 0, index_col = 0)
     except Exception as e:
         print(f'Products tag file cant be read: {e}')
+<<<<<<< HEAD
         productsXtags = -1
+=======
+        productsXtags = -1    
+>>>>>>> 797bdd44df71dd6d498151e3b1036f691ee6b4bc
 
     return  sim, users, avg_item_ratings, title2handle, base_url, productsXtags
 
@@ -331,6 +351,7 @@ def create_profile(data, productsXtags_arr):
     """
     
     # a slightly smaller weight is assigned to filter tags
+<<<<<<< HEAD
     uncomfortable_dict = {'Arms':{'Sleeves':1}, 'Waist':{'High Waist':1, 'Skater':1, 'Shift':1, 'Slip':1, "Bodycon":-2, "Crop Top":-2},
                          'Legs': {'Midi':1, 'Gown':1, 'Pants':1, 'Maxi':1, 'Gown':1},
                          'Back':{'Backless':-2},
@@ -339,6 +360,16 @@ def create_profile(data, productsXtags_arr):
     #Questions and corresponding weights of thier tags
     body_tags = {'Bodies':2, 'accentuate':4, 'uncomfortable': 4, 'height':1, 'colour palettes':2,
                 'prints':2,'occasion':5 }
+=======
+    uncomfortable_dict = {'Arms':{'Sleeves':1}, 'Waist':{'High Waist':1, 'Skater':1, 'Shift':1, 'Slip':1, "Bodycon":-0.1, "Crop Top":-0.1},
+                         'Legs': {'Midi':1, 'Gown':1, 'Pants':1, 'Maxi':1, 'Gown':1},
+                         'Back':{'Backless':-0.1},
+                         'Collarbones':{"Off-Shoulder":-1, "Strapless":-0.1}}
+    
+    #Questions and corresponding weights of thier tags
+    body_tags = {'Bodies':2, 'accentuate':4, 'uncomfortable': 4, 'height':1, 'colour palettes':2,
+                'prints':2,'occasion':5}
+>>>>>>> 797bdd44df71dd6d498151e3b1036f691ee6b4bc
     
     tags = dict()
     for item,weight in body_tags.items():
@@ -411,8 +442,13 @@ def get_tag_based_inference(tag_profile, tag_array, title2handle = None , ids = 
             print('No products selected by the popup part')
             res = []
             
+<<<<<<< HEAD
         #return mixed results
         return list(set(res))
+=======
+        #return both results for displaying
+        return tag_res, list(set(res))
+>>>>>>> 797bdd44df71dd6d498151e3b1036f691ee6b4bc
     else:
         #return tag based recommendations only
         return tag_res
