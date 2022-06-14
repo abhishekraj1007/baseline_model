@@ -4,21 +4,17 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import numpy as np
-import seaborn as sns
 from tqdm import tqdm
 import random
 from random import choices
-from nltk.tokenize import word_tokenize
-import string
+# from nltk.tokenize import word_tokenize
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
-import os
 import pymongo
 base_url = 'https://leaclothingco.com/products/'
 
 db_name = 'lea_clothing_backend'
 collection_name = 'processed_user_profiles'
-
 
 
 def pre_process(orders_filename = 'orders_export_1.csv', products_filename = 'products_export_1.csv'):
@@ -213,13 +209,13 @@ def get_inference(email, product_title, sim, users, avg_item_ratings, title2hand
             part5 = get_tag_based_inference(tag_profile, tag_array , title2handle, standalone = True, n_recos = 15)[1:]
     
 #         #print output and verify results
-        print(f'Part2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
+#         print(f'Part2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
         
         # sampling recommendations based on priority based function
         # The three position for weights represent prob dist for selection from each arr
         Model_weights = [1, 1.5, 1, 1]
         results = weighted_sample_without_replacement( arrs= [ part2, part3, part4, part5 ], weight_each_arr = Model_weights, k=reco_count)
-        return [base_url + item for item in results]
+        return results
         
         
 def weighted_sample_without_replacement(arrs, weight_each_arr, k=2):
@@ -291,7 +287,7 @@ def model_fn(orders_filename, products_filename, tags_filename):
         productsXtags = pd.read_csv(tags_filename, header = 0, index_col = 0)
     except Exception as e:
         print(f'Products tag file cant be read: {e}')
-        productsXtags = -1    
+        productsXtags = -1
 
     return  sim, users, avg_item_ratings, title2handle, base_url, productsXtags
 
@@ -335,14 +331,14 @@ def create_profile(data, productsXtags_arr):
     """
     
     # a slightly smaller weight is assigned to filter tags
-    uncomfortable_dict = {'Arms':{'Sleeves':1}, 'Waist':{'High Waist':1, 'Skater':1, 'Shift':1, 'Slip':1, "Bodycon":-0.1, "Crop Top":-0.1},
+    uncomfortable_dict = {'Arms':{'Sleeves':1}, 'Waist':{'High Waist':1, 'Skater':1, 'Shift':1, 'Slip':1, "Bodycon":-2, "Crop Top":-2},
                          'Legs': {'Midi':1, 'Gown':1, 'Pants':1, 'Maxi':1, 'Gown':1},
-                         'Back':{'Backless':-0.1},
-                         'Collarbones':{"Off-Shoulder":-1, "Strapless":-0.1}}
+                         'Back':{'Backless':-2},
+                         'Collarbones':{"Off-Shoulder":-2, "Strapless":-2}}
     
     #Questions and corresponding weights of thier tags
     body_tags = {'Bodies':2, 'accentuate':4, 'uncomfortable': 4, 'height':1, 'colour palettes':2,
-                'prints':2,'occasion':5}
+                'prints':2,'occasion':5 }
     
     tags = dict()
     for item,weight in body_tags.items():
@@ -415,8 +411,8 @@ def get_tag_based_inference(tag_profile, tag_array, title2handle = None , ids = 
             print('No products selected by the popup part')
             res = []
             
-        #return both results for displaying
-        return tag_res, list(set(res))
+        #return mixed results
+        return list(set(res))
     else:
         #return tag based recommendations only
         return tag_res
