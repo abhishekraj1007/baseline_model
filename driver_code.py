@@ -6,10 +6,12 @@ import pymongo
 import flask
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
+from flask_cors import CORS
+
 load_dotenv()
 
 app = Flask(__name__)
-
+CORS(app)
 #activating pymongo collection
 connection = pymongo.MongoClient("mongodb+srv://my_jurisdiction:P9N18hMrpvSWJiEy@graphql-cluster.lsiwf1p.mongodb.net/?retryWrites=true&w=majority")
 
@@ -21,12 +23,12 @@ sim, users, avg_item_ratings, title2handle, base_url, tag_array = model_fn(order
 productsXtags, title2handle, base_url = model_fn_2(products_filename = 'products_export_1.csv')
 
 
+# get data from the html form and perform prediction
+
 @app.route('/test', methods=['GET'])
 def get_test():
     return "Success....."
 
-
-# get data from the html form and perform prediction
 @app.route('/recommend',methods=['POST'])
 def recommend():
     
@@ -42,6 +44,7 @@ def recommend():
 # get data from the html form and perform prediction
 @app.route('/personalize',methods=['POST'])
 def personalize():
+    print('check......')
 
     data = request.json
     data = data['finalQuizData']
@@ -64,6 +67,7 @@ def personalize():
     
     tag_plus_style = get_tag_based_inference(tag_profile, tag_array = productsXtags, title2handle = title2handle, ids = ids,
                                                                             standalone = False, n_recos = 15)
+                        
     
     return jsonify( [{'Handle':item, 'URL':base_url + item} for item in tag_plus_style] )
 
