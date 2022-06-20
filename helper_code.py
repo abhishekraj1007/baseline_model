@@ -1,5 +1,7 @@
 ##Things to test: Test process_product_name for correct conversions, check if the style matching criteria is correct.
 
+# from email import header
+# from re import L
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
@@ -7,20 +9,14 @@ import numpy as np
 from tqdm import tqdm
 import random
 from random import choices
-# from nltk.tokenize import word_tokenize
+
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
-import pymongo
-base_url = 'https://leaclothingco.com/products/'
-
-db_name = 'lea_clothing_backend'
-collection_name = 'processed_user_profiles'
 
 
-def pre_process(orders_filename = 'orders_export_1.csv', products_filename = 'products_export_1.csv'):
+def pre_process(engine):
     #Read Orders file
-    orders = pd.read_csv(orders_filename)
-
+    orders = pd.read_sql_query(f'select * from "orders"',con=engine)
     #changing column names for convenience
     cols = orders.columns
     cols = [''.join(item.title() for item in entity.split()) for entity in cols]
@@ -31,33 +27,20 @@ def pre_process(orders_filename = 'orders_export_1.csv', products_filename = 'pr
     orders = pd.merge(orders, map1, on='Name', suffixes=('_old', ''))
     map2 = orders.dropna(subset=['FulfillmentStatus'])[['Name','FulfillmentStatus']]
     orders = pd.merge(orders, map2, on='Name', suffixes=('_old', ''))
-    
 
-    products = pd.read_csv(products_filename)
-    #dropping duplicates
-    products.drop_duplicates(subset='Title', keep="first", inplace= True)
+    title2handle = pickle.load(open('title2handle','rb'))
+    product_names = pickle.load(open('product_names','rb'))
 
-    products = products[['Handle','Title']]
-    products.dropna(subset=['Title'], inplace = True)
-    products.reset_index(inplace=True, drop = True)
-
-    # finally creating mappings title -> handle and handle -> title
-    handle2title = dict(zip(products.Handle, products.Title))
-    title2handle = dict(zip(products.Title, products.Handle))
-
-    ## creating product list for filtering
-    products_title_list = products.Title.dropna().unique()
-    products_handle_list = products.Handle.dropna().unique()
-        
-    #processing product names(Handle- Title conflicts)
+    #processing product names(Title conflicts)
     orders.LineitemName = orders.LineitemName.apply(lambda x: x.split(' - ')[0].strip())
-    
-    #removing outdated products
-    orders = orders.loc[orders.LineitemName.isin(products_title_list)]
-    
+
     # converting product Titles to their Handles
     orders.LineitemName = orders.LineitemName.map(title2handle)
     
+    #removing outdated products
+    orders = orders.loc[orders.LineitemName.isin(product_names)]
+    
+    ## seperate table for email-province, temporary
     #saving orders for further use
     orders.to_csv('orders_export_processed.csv', index = False)
     
@@ -82,23 +65,24 @@ def pre_process(orders_filename = 'orders_export_1.csv', products_filename = 'pr
     orders = orders[['Email', 'ProductHandle', 'rating']]
     orders.reset_index(drop=True, inplace=True)
 
-    #preparing for missing products in training data to avoid errors at inference
-    missing_ids = list(set(products_handle_list) - set(orders.ProductHandle.unique()))
-    for pid in missing_ids:
-        orders.loc[len(orders.index)] = [str(pid) +'@Dummy', pid, 5]
+    # #preparing for missing products in training data to avoid errors at inference
+    # missing_ids = list(set(product_names) - set(orders.ProductHandle.unique()))
+    # print(missing_ids)
+    # for pid in missing_ids:
+    #     orders.loc[len(orders.index)] = [str(pid) +'@Dummy', pid, 5]
+    
     
     # pivoting tables for training data
     orders = orders.pivot_table('rating',['Email'],'ProductHandle')
+    temp1 = orders.columns
+
+    orders = orders.reindex(columns=product_names)
     orders.fillna(0, inplace = True)
-    
-    #writing users(orders) to disk
-    print('Processing finished, writing users to disk...\n')
-    out_filename = 'users.csv'
-    orders.to_csv(out_filename, index = True)
-    return out_filename, title2handle    
-    
-def get_sim(filename = 'users.csv'):
-    orders = pd.read_csv(filename, header = 0, index_col = 0)
+
+    #dumping avg_item_ratings
+    pickle.dump( orders.mean(axis = 0), open('avg_item_ratings','wb'))
+    print(f' users processing done...')
+    #Finished processing orders ^
     
     ids = list(orders.columns)
     idx_to_ids = dict(enumerate(ids))
@@ -130,22 +114,28 @@ def get_sim(filename = 'users.csv'):
             sim[col][row] = res
     
     sim = pd.DataFrame(sim, columns=ids, index = ids)
+    sim.to_sql('sim', engine, index = True, if_exists = 'replace' )
     print('Training Corr matrix finished...\nsaving weights...\n')
-    sim.to_csv('sim.csv', index = True)
+
     
+def get_inference(email, product_title, engine, reco_count = 10, avg_item_ratings = 'avg_item_ratings', 
+                        title2handle = 'title2handle', tag_array = 'productsXtags', similarity_matrix='sim'):
     
-def get_inference(email, product_title, sim, users, avg_item_ratings, title2handle, tag_array, connection, reco_count = 10):
-    
+    title2handle = pickle.load(open(title2handle, 'rb'))
     product_handle = title2handle[product_title]
+
+    temp_user = get_user(email, engine)
+    sim = pd.read_sql_query(f'select * from {similarity_matrix}',con=engine).set_index('index', drop=True)
     
-    if email in users.index:
+    if not temp_user.empty:
         print('Found existing user...')
 #         print('Entered part 1\n')
-        temp_user = users.loc[email]
+
         #Assume customer likes/Bought this product
         temp_user.loc[product_handle] = 5.0
         
         #Normalizing the rating scale by subtracting average ratings by users
+        avg_item_ratings = pickle.load( open('avg_item_ratings','rb'))
         r_u_j = temp_user.values - avg_item_ratings.values
 
         ##Getting inference using:
@@ -169,15 +159,15 @@ def get_inference(email, product_title, sim, users, avg_item_ratings, title2hand
         res.sort(key = lambda x: x[1], reverse = True)
         
         results = []
+        #pending make it simple
         for product,score in res[:reco_count]:
-            prod_url = base_url + product
-#             print(prod_url)
-            results.append(prod_url)
+            results.append(product)
         return results
 
     else:
         # Demographics Based
         #2a Explore User Profile
+        # pending, make a 2d table hardcoded and saved into db
         print('Customer order history not found...')
         try:
             cust = pd.read_csv('customers_export.csv')
@@ -190,26 +180,28 @@ def get_inference(email, product_title, sim, users, avg_item_ratings, title2hand
 #         print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
         part3 = sim.loc[:,product_handle].sort_values(ascending = False)[1:reco_count+1].index.to_list()
         
-        
         #2c get_similar descriptions based products
         part4 = get_similar_desc(product_handle)
         
         #2d get_tag_based_personalized recommendations else show similar tag based products
-        #Pending, to be done through Database
-        try:
-            #fetching user attributes from mongodb
-            tag_profile = get_user_tag_profile(connection, email, tag_array.columns)
+        tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('Handle', drop = True)
+
+        #fetching user attributes from mongodb
+        tag_profile = get_user_tag_profile(email, tag_array.columns, engine)
+
+        if not tag_profile.empty:
             print(f'Found tag profile: {email}')
-            part5 = get_tag_based_inference(tag_profile , tag_array , title2handle, standalone = True, n_recos = 15)
-            
-        except Exception as e:
+            part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine ,
+                                title2handle = 'title2handle', standalone = True, n_recos = 10)
+        else:
             print(f'User tag profile not found, {e}\n')
             #pending
             tag_profile = tag_array.loc[tag_array.index == product_handle ].iloc[-1,:]
-            part5 = get_tag_based_inference(tag_profile, tag_array , title2handle, standalone = True, n_recos = 15)[1:]
-    
-#         #print output and verify results
-#         print(f'Part2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
+            part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine ,
+                            title2handle = 'title2handle', standalone = True, n_recos = 10)[1:]
+
+        #print output and verify results
+        print(f'\nPart2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
         
         # sampling recommendations based on priority based function
         # The three position for weights represent prob dist for selection from each arr
@@ -243,8 +235,7 @@ def get_similar_desc(product_handle):
     sim_desc = pickle.load(open('sim_desc','rb'))
     return sim_desc[product_handle]
         
-    
-    
+
 def get_demographic_recos(product_handle, ShippingProvinceName = 'Delhi', orders_filename = 'orders_export_processed.csv'):
     df = pd.read_csv(orders_filename)
     
@@ -273,23 +264,24 @@ def Item_purchased_Together_statewise(df,state):
     return pairs
 
     
-def model_fn(orders_filename, products_filename, tags_filename):
-    users_filename, title2handle = pre_process(orders_filename, products_filename)
-    
-    get_sim(users_filename)
-    sim = pd.read_csv('sim.csv', index_col = 0, header = 0)
-    users = pd.read_csv('users.csv', index_col = 0, header = 0)
-    
-    avg_item_ratings = users.mean(axis = 0)
-    
-    base_url = 'https://leaclothingco.com/products/'
-    try:
-        productsXtags = pd.read_csv(tags_filename, header = 0, index_col = 0)
-    except Exception as e:
-        print(f'Products tag file cant be read: {e}')
-        productsXtags = -1
+# def model_fn(orders_filename, products_filename, tags_filename):
 
-    return  sim, users, avg_item_ratings, title2handle, base_url, productsXtags
+
+#     users_filename, title2handle = pre_process(orders_filename, products_filename)
+    
+#     get_sim(users_filename)
+#     sim = pd.read_csv('sim.csv', index_col = 0, header = 0)
+#     users = pd.read_csv('users.csv', index_col = 0, header = 0)
+
+    
+#     base_url = 'https://leaclothingco.com/products/'
+#     try:
+#         productsXtags = pd.read_csv(tags_filename, header = 0, index_col = 0)
+#     except Exception as e:
+#         print(f'Products tag file cant be read: {e}')
+#         productsXtags = -1
+
+#     return  sim, users, avg_item_ratings, title2handle, base_url, productsXtags
 
 
 ###############################################################
@@ -325,10 +317,11 @@ def create_product_tags_arr(filename = 'products_export_1.csv'):
     return processed_filename, title2handle
 
 
-def create_profile(data, productsXtags_arr):
+def create_profile(data, product_tags_filename = 'product_tags'):
     """
     function to process raw json into useful user profile
     """
+    product_tags = pickle.load(open(product_tags_filename, 'rb'))
     
     # a slightly smaller weight is assigned to filter tags
     uncomfortable_dict = {'Arms':{'Sleeves':1}, 'Waist':{'High Waist':1, 'Skater':1, 'Shift':1, 'Slip':1, "Bodycon":-2, "Crop Top":-2},
@@ -356,7 +349,7 @@ def create_profile(data, productsXtags_arr):
                 
 #             print('temp',temp)
             tags.update(dict( (
-                ''.join( item.lower() for item in tag.replace('-','').split() ),weight) for tag in temp ))
+                ''.join( item.lower() for item in tag.replace('-','').replace("'",'').split() ),weight) for tag in temp ))
             
 #             print(tags)
         else:
@@ -367,10 +360,12 @@ def create_profile(data, productsXtags_arr):
             for tag in values:
                 value = uncomfortable_dict[tag]
                 
+                #pending verify tags coming from payload in the end 
                 tags.update(dict( (
-                    ''.join( item.lower() for item in key.replace('-','').split() ), value * weight) for key,value in value.items() ))
+                    ''.join( item.lower() for item in key.replace('-','').replace("'",'').split() ), value * weight) for key,value in value.items() ))
 #             print('uncomfortable', values, tags)
-    tag_profile = pd.Series(tags, index = list(productsXtags_arr.columns))
+    #using product_tags as columns/index of the tag profile
+    tag_profile = pd.Series(tags, index = product_tags)
     tag_profile.fillna(0, inplace= True)
     return tag_profile
 
@@ -379,7 +374,6 @@ def get_tags_sim(tag_profile, tag_array, n):
     """
     Function to fetch n most similar indices based on 1d array and another 2d array
     """
-    
     #notice that order has been reversed
     ids = (-cosine_similarity( tag_array, [tag_profile])).argsort(axis = 0)[:n].flatten()
     
@@ -388,16 +382,17 @@ def get_tags_sim(tag_profile, tag_array, n):
     return tag_array.index[ids].tolist()
 
     
-def get_tag_based_inference(tag_profile, tag_array, title2handle = None , ids = None, standalone = False, n_recos = 15):
-    
+def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None , ids = None, standalone = False, n_recos = 15):
     """
     note that product ids must be in list format
-    """    
-    #get actual tag based similar products
+    """
+    tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('Handle', drop = True)
+
+    ## get actual tag based similar products
     tag_res = get_tags_sim(tag_profile, tag_array, n = n_recos)
-    
     if not standalone:
         if ids:
+            title2handle = pickle.load(open(title2handle, 'rb'))
             ids = [title2handle[item] for item in ids]
             #get similar products from the selected product styles by the user on popup page
             res = []
@@ -419,27 +414,25 @@ def get_tag_based_inference(tag_profile, tag_array, title2handle = None , ids = 
 
 
 
-def get_user_tag_profile(connection, email, indices, db_name = 'lea_clothing_backend', collection_name = 'processed_user_profiles'):
-    db = connection[db_name] #change the name of database as per your wish
-    collection = db[collection_name] #change the collection
+def get_user_tag_profile(email, indices, engine):
+    with engine.connect() as con:
+        values = con.execute(f"""select * from "tags_profile" where "Email" = '{email}'""").fetchone()
     
-    values = collection.find_one({'_id': email})
     if values:
-        values = values['value']
-        return pd.Series(values, index = indices)
+        #skipping email and creating profile with the sparse values
+        return pd.Series(values[1:], index = indices)
     else:
-        raise Exception
+        return pd.Series([])
 
 
+#pending
 def store_user_mongo_unprocessed(connection, data, email, db_name = 'lea_clothing_backend', collection_name = 'user_profiles'):
     db = connection[db_name] #change the name of database as per your wish
     collection = db[collection_name] #change the collection
-    
     d = dict()
     d['_id'] = email
     d.update(data)
 #     d.pop('email')
-    
     #checking if user already exists in mongodb
     data = collection.find_one({'_id': email})
     if data:
@@ -449,31 +442,132 @@ def store_user_mongo_unprocessed(connection, data, email, db_name = 'lea_clothin
         collection.insert_one(d)
         
         
-def store_user_mongo(connection, tag_profile, email, db_name = 'lea_clothing_backend', collection_name = 'processed_user_profiles'):
-    db = connection[db_name] #change the name of database as per your wish
-    collection = db[collection_name] #change the collection
-    
-    d = dict()
-    d['_id'] = email
-    d['value'] = tag_profile.tolist()
-    
-    #checking if user already exists in mongodb
-    data = collection.find_one({'_id': email})
+def store_user_mongo(tag_profile, email, engine):
+    ## checking if profile exists
+    with engine.connect() as con:
+        data = con.execute(f"""select "Email" from "tags_profile" where "Email" = '{email}'""").fetchone()
     if data:
-        print(f'User already exists in processed_user_profiles, overwriting...\n')
-        collection.replace_one({'_id': email},d)
+        print(f'Updating old User profile : {data[0]}\n')
+        s= ''
+        for idx,value in zip(tag_profile.index, tag_profile.values):
+            temp = idx + '=' + str(int(value)) + ','
+            s+= temp
+        s = s[:-1]
+        with engine.connect() as con:
+            con.execute(f"""
+            UPDATE "tags_profile"
+            SET {s}
+            WHERE "Email" = '{email}'
+            """)
     else:
-        collection.insert_one(d)
+        # Insert data as user profile not exists
+        with engine.connect() as con:
+            con.execute(f"""
+            insert into "tags_profile"
+            values ('{email}', {str(tag_profile.values.tolist())[1:-1]} )
+            """)
+        print('New user tag profile added.')
+        
 
-
-def model_fn_2(products_filename):
-    processed_filename, title2handle = create_product_tags_arr(products_filename)
+# def model_fn_2(products_filename):
+#     processed_filename, title2handle = create_product_tags_arr(products_filename)
     
-    productsXtags = pd.read_csv(processed_filename, header = 0, index_col = 0)
+#     productsXtags = pd.read_csv(processed_filename, header = 0, index_col = 0)
     
-    base_url = 'https://leaclothingco.com/products/'
+#     base_url = 'https://leaclothingco.com/products/'
     
-    return productsXtags, title2handle, base_url
+#     return productsXtags, title2handle, base_url
 
 
 
+#################################################################################
+
+def process_products(engine):
+    """
+    Function to initialize things and will be used for retraining, other purpose it serves:
+    1. To check if products data has changed, if yes creates new product and tags mappings stored in db.
+    2. Stores products tags in order, in order to be used later.
+    3. Same as (2) for Product names.
+    4. Dumps a Title to Header names mapping file.
+    5. initializes tags profile database with schema
+    """
+
+    table_name = 'products'
+    products = pd.read_sql_query(f'select * from "{table_name}"',con=engine)
+
+    ## dropping duplicates
+    products.drop_duplicates(subset='Title', keep="first", inplace= True)
+    products.dropna(subset=['Title','Tags'], inplace = True)
+    products.reset_index(inplace=True, drop = True)
+    title2handle = dict(zip(products.Title, products.Handle))
+
+    print(products.shape)
+    
+    products = products[['Handle','Tags']]
+    products.Tags = products.Tags.apply(lambda x: x.split(', '))
+    products = products.explode('Tags')
+    products.Tags = products.Tags.apply(lambda x: ''.join( item.lower() for item in x.replace('-','').replace("'",'').split() ))
+    products['count'] = 1
+    products = products.pivot_table('count', ['Handle'],'Tags')
+    products.fillna(0, inplace = True)
+    
+    ## dropping products list, Tags list, title2handle dict and saving productsXtags into postgre db
+    product_names = products.index.to_list()
+    product_tags = products.columns.to_list()
+    pickle.dump(product_names, open('product_names','wb'))
+    pickle.dump(product_tags, open('product_tags','wb'))
+    pickle.dump(title2handle, open('title2handle','wb'))
+    products.to_sql('productsXtags', engine, index = True, if_exists = 'replace' )
+
+
+    #pending check when to replace/append/delete
+    temp = ['dummy@dummy'] + [0] * len(product_tags)
+    empty_tag_profile = pd.DataFrame([temp], columns=['Email'] + product_tags)
+    empty_tag_profile.to_sql('tags_profile', engine, index = False, if_exists = 'replace')
+    
+    with engine.connect() as con:
+        con.execute("""ALTER TABLE "tags_profile" ADD PRIMARY KEY ("Email")""")
+
+    print(f'\nSuccessfully processed products...')
+
+    ## pending
+    ## add a function to check change in products/tags (check by reading old file)
+
+
+
+def get_user(email, engine):
+    """
+    to get user order history at runtime(get_inference) to be used with .sim matrix -> doctorized product ratings for inference
+    """
+    orders = pd.read_sql_query(f"""select * from "orders" where "Email" = '{email}'""",con=engine)
+    cols = orders.columns
+    cols = [''.join(item.title() for item in entity.split()) for entity in cols]
+    orders.columns = cols
+    #mapping missing and improper data
+    map1 = orders.dropna(subset=['FinancialStatus'])[['Name','FinancialStatus']]
+    orders = pd.merge(orders, map1, on='Name', suffixes=('_old', ''))
+    map2 = orders.dropna(subset=['FulfillmentStatus'])[['Name','FulfillmentStatus']]
+    orders = pd.merge(orders, map2, on='Name', suffixes=('_old', ''))
+    # Selecting required columns
+    req = ['Name', 'Email','LineitemName','LineitemFulfillmentStatus','FinancialStatus','FulfillmentStatus']
+    orders = orders[req]
+    #processing product names(Handle- Title conflicts)
+    orders.LineitemName = orders.LineitemName.apply(lambda x: x.split(' - ')[0].strip())
+    title2handle = pickle.load(open('title2handle','rb'))
+    # converting product Titles to their Handles
+    orders.LineitemName = orders.LineitemName.map(title2handle)
+    #loading handle names
+    product_names = pickle.load(open('product_names','rb'))
+    #removing outdated products
+    orders = orders.loc[orders.LineitemName.isin(product_names)]
+    if len(orders) == 0:
+        return pd.Series([])
+    
+    # if data is not empty proceed further
+    user_profile = pd.Series(index = product_names, dtype = 'int')
+    rate_dict = {'paid':5, 'pending':4, 'voided':3, 'refunded':1}
+    orders['rating'] = orders.FinancialStatus.map(rate_dict)
+    user_profile[orders.LineitemName.values] = orders.rating.values
+    
+    # print(user_profile[user_profile!=0])
+    return user_profile    
