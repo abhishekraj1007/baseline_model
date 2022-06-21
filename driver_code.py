@@ -36,7 +36,7 @@ def recommend():
     data = request.json
     
     # print(f"Recommendations for the product: { base_url + title2handle[ data['product_title'] ] }")
-    res = get_inference(data['email'], data['product_title'], engine, reco_count = 15)
+    res = get_inference(data['email'], data['product_title'], engine, reco_count = 8)
 
     return jsonify( [{'Handle':item, 'URL':base_url + item} for item in res] )
 
@@ -45,10 +45,10 @@ def recommend():
 @app.route('/personalize',methods=['POST'])
 def personalize():
 
+
     data = request.json
     data = data['finalQuizData']
     email = data['email']['value']
-    
     
     tag_profile = create_profile(data, product_tags_filename='product_tags')
     
@@ -67,7 +67,7 @@ def personalize():
     
     ## passing postgre engine object to get tag based inference using tag array
     tag_plus_style = get_tag_based_inference(tag_profile, 'productsXtags' , engine , title2handle = 'title2handle', ids = ids,
-                                                                            standalone = False, n_recos = 15)
+                                                                            standalone = False, n_recos = 12)
                       
     return jsonify( [{'Handle':item, 'URL':base_url + item} for item in tag_plus_style] )
 

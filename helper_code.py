@@ -1,7 +1,6 @@
-##Things to test: Test process_product_name for correct conversions, check if the style matching criteria is correct.
+##Things to test: Test process_product_name for correct conversions, check if the style matching criteria is correct,
+## Check for if correct results and order is being returned after sampling results from the subresults
 
-# from email import header
-# from re import L
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
@@ -39,11 +38,21 @@ def pre_process(engine):
     
     #removing outdated products
     orders = orders.loc[orders.LineitemName.isin(product_names)]
+
+    print(f'Preparing sim_demo...')
+    demo_df = orders.dropna(subset=['ShippingProvinceName'])
+    sim_demo = pd.DataFrame([],index = demo_df.ShippingProvinceName.unique().tolist(), columns=demo_df.LineitemName.unique().tolist())
+    for state,group in demo_df.groupby(['ShippingProvinceName'])['Email','LineitemName']:
+        for product in group.LineitemName.unique():
+            users = group.loc[group.LineitemName == product, 'Email'].unique()
+            sim_products = group.loc[(group.Email.isin(users))&(group.LineitemName!=product),'LineitemName'].value_counts().index.to_list()[:10]
+            # print(state, product, sim_products, sep='::',end='\n\n')
+            if sim_products:
+                sim_demo.loc[state,product] = ','.join(sim_products)
     
-    ## seperate table for email-province, temporary
-    #saving orders for further use
-    orders.to_csv('orders_export_processed.csv', index = False)
-    
+    #saving hardcoded sim_demo for faster demographic inference
+    sim_demo.to_sql('sim_demo', engine, index = True, if_exists = 'replace' )
+
     # Selecting required columns
     req = ['Name', 'Email','LineitemName','LineitemFulfillmentStatus','FinancialStatus','FulfillmentStatus']
     orders = orders[req]
@@ -70,7 +79,6 @@ def pre_process(engine):
     # print(missing_ids)
     # for pid in missing_ids:
     #     orders.loc[len(orders.index)] = [str(pid) +'@Dummy', pid, 5]
-    
     
     # pivoting tables for training data
     orders = orders.pivot_table('rating',['Email'],'ProductHandle')
@@ -127,9 +135,9 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
     temp_user = get_user(email, engine)
     sim = pd.read_sql_query(f'select * from {similarity_matrix}',con=engine).set_index('index', drop=True)
     
+    # 1. Based on orders history
     if not temp_user.empty:
         print('Found existing user...')
-#         print('Entered part 1\n')
 
         #Assume customer likes/Bought this product
         temp_user.loc[product_handle] = 5.0
@@ -147,66 +155,86 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
             #Skip items which are already bought or the item i.e. currently viewed
             if temp_user.loc[item]>=5 or item == product_handle:
                 continue
-
             sim_i = sim.loc[:,item].values
             num = np.matmul(sim_i, r_u_j)
-
             den = sim.loc[:,item].sum()
-
             score = (num/den) + avg_item_ratings[item]
             res.append([item,score])
-
+        
         res.sort(key = lambda x: x[1], reverse = True)
-        
-        results = []
-        #pending make it simple
-        for product,score in res[:reco_count]:
-            results.append(product)
-        return results
-
+        part1 = [product for (product,score) in res[:5]]
     else:
-        # Demographics Based
-        #2a Explore User Profile
-        # pending, make a 2d table hardcoded and saved into db
-        print('Customer order history not found...')
-        try:
-            cust = pd.read_csv('customers_export.csv')
-            province = cust.loc[cust.Email == email,'Province'].values[0]
-            part2 = get_demographic_recos(product_handle, ShippingProvinceName = province, orders_filename = 'orders_export_processed.csv')
-        except Exception as e:
-            part2 = []
-        
-#         2b show content based recos
-#         print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
-        part3 = sim.loc[:,product_handle].sort_values(ascending = False)[1:reco_count+1].index.to_list()
-        
-        #2c get_similar descriptions based products
-        part4 = get_similar_desc(product_handle)
-        
-        #2d get_tag_based_personalized recommendations else show similar tag based products
-        tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('Handle', drop = True)
+        part1 = []
+        print('Customer order history not found, Skipping CF results')
 
-        #fetching user attributes from mongodb
-        tag_profile = get_user_tag_profile(email, tag_array.columns, engine)
 
-        if not tag_profile.empty:
-            print(f'Found tag profile: {email}')
-            part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine ,
-                                title2handle = 'title2handle', standalone = True, n_recos = 10)
+    # Demographics Based
+    # 2. Explore User Profile
+    # pending, make a 2d table hardcoded and saved into db
+    try:
+        province = pd.read_sql_query(f"""select "Province" from customers where "Email" = '{email}' """,con=engine)
+        if not province.empty:
+            province = province.iloc[0,0]
+            data = pd.read_sql_query(f"""select "{product_handle}" from sim_demo where "index" = '{province}' """, con=engine)
+            if not data.empty:
+                part2 = data.iloc[0,0].split(',')[:5]
+                print(f'Demographics results included for user from state: {province}')
+            else:
+                part2 = []
         else:
-            print(f'User tag profile not found, {e}\n')
-            #pending
-            tag_profile = tag_array.loc[tag_array.index == product_handle ].iloc[-1,:]
-            part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine ,
-                            title2handle = 'title2handle', standalone = True, n_recos = 10)[1:]
+            part2 = []
+    except Exception as e:
+        print(f'Exception at Demographics part: {e}')
+        part2 = []
+    
 
-        #print output and verify results
-        print(f'\nPart2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
-        
-        # sampling recommendations based on priority based function
-        # The three position for weights represent prob dist for selection from each arr
+    # 3. show content based recos
+    # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
+    part3 = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
+    
+
+    # 4. get_similar descriptions based products
+    try:
+        data = pd.read_sql_query(f"""select "sim_products" from sim_desc where "product" = '{product_handle}' """, con = engine)
+        if not data.empty:
+            part4 = data.iloc[0,0].split(',')[:5]
+        else:
+            part4 = []
+    except Exception as e:
+        print(f'similar description part could not be loaded due to error: {e}')
+        part4 = []
+
+
+    # 5. get_tag_based_personalized recommendations else show similar tag based products
+    tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('Handle', drop = True)
+    #fetching user attributes from mongodb
+    tag_profile = get_user_tag_profile(email, tag_array.columns, engine)
+
+    if not tag_profile.empty:
+        print(f'Found tag profile: {email}')
+        part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine ,
+                            title2handle = 'title2handle', standalone = True, n_recos = 5)
+    else:
+        print(f'User tag profile not found')
+        #pending
+        tag_profile = tag_array.loc[tag_array.index == product_handle ].iloc[-1,:]
+        part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine ,
+                        title2handle = 'title2handle', standalone = True, n_recos = 6)[1:]
+
+    #print output and verify results
+    print(f'\nPart1: {part1},\nPart2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
+    
+    # sampling recommendations based on priority based function
+    # The five positions for weights represent prob dist of selection from each arr
+    if temp_user.empty:
         Model_weights = [1, 1.5, 1, 1]
         results = weighted_sample_without_replacement( arrs= [ part2, part3, part4, part5 ], weight_each_arr = Model_weights, k=reco_count)
+        return results
+    else:
+        # sample results from both collaborative(60%) and rest(40%) from content+demographics+tags(personalized/Non-personalized)+similar_desc
+        Model_weights = [10, 2, 3, 3, 5]
+        results = weighted_sample_without_replacement( arrs= [ part1, part2, part3, part4, part5 ], weight_each_arr = Model_weights, k=reco_count)
+        print(results)
         return results
         
         
@@ -260,7 +288,6 @@ def Item_purchased_Together_statewise(df,state):
         users = df.loc[df.LineitemName == i, 'Email'].unique()
         vc2 = df.loc[(df.Email.isin(users))&(df.LineitemName!=i),'LineitemName'].value_counts()
         pairs[i] = vc2.index.to_list()[:5]
-
     return pairs
 
     
