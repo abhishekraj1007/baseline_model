@@ -461,24 +461,22 @@ def store_user_unprocessed(email, data, recos, engine):
     """
     1. email
     2. data is out payload sent to be as it is
-    3. recos are the recommendations from the personalize part of the API
+    3. recos are the recommendations from the personalize part of the API in json format
     to be stored
     """
     table_name = 'tags_profile_unproc'
-
-    recos = ','.join(recos)
 
     ## checking if profile exists
     with engine.connect() as con:
         user = con.execute(f"""select "Email" from "{table_name}" where "Email" = '{email}'""").fetchone()
     if user:
-        print(f'Updating old Unprocessed data: {email[0]}\n')
+        print(f'Updating old Unprocessed data: {user[0]}')
         with engine.connect() as con:
             con.execute(f"""
             UPDATE "{table_name}"
-            SET email = '{email}',
-            data = '{json.dumps(data)}',
-            recos = '{recos}',
+            SET "Email" = '{email}',
+            "unproc_data" = '{json.dumps(data)}',
+            "recos" = '{json.dumps(recos)}'
             WHERE "Email" = '{email}'
             """)
     else:
@@ -486,7 +484,7 @@ def store_user_unprocessed(email, data, recos, engine):
         with engine.connect() as con:
             con.execute(f"""
             insert into "{table_name}"
-            values ('{email}', '{json.dumps(data)}', '{recos}')
+            values ('{email}', '{json.dumps(data)}', '{json.dumps(recos)}')
             """)
         print(f'New user added in unprocessed Data.')
 
@@ -498,7 +496,7 @@ def store_user(tag_profile, email, engine):
     with engine.connect() as con:
         data = con.execute(f"""select "Email" from "{table_name}" where "Email" = '{email}'""").fetchone()
     if data:
-        print(f'Updating old User profile : {data[0]}')
+        print(f'Updating current User profile : {data[0]}\nand')
         s= ''
         for idx,value in zip(tag_profile.index, tag_profile.values):
             temp = idx + '=' + str(int(value)) + ','
@@ -517,7 +515,7 @@ def store_user(tag_profile, email, engine):
             insert into "{table_name}"
             values ('{email}', {str(tag_profile.values.tolist())[1:-1]} )
             """)
-        print('New user tag profile added.')
+        print('New user tag profile added.\nand')
         
 
 # def model_fn_2(products_filename):
@@ -584,7 +582,8 @@ def process_products(engine, create_sim = False):
         con.execute("""ALTER TABLE "tags_profile" ADD PRIMARY KEY ("Email")""")
     
     #initialize tags_profile_unproc postgre table
-    temp = ['dummy@dummy', json.dumps({'a':1}) , 'a,b' ]
+    temp = ['dummy@dummy', json.dumps({'a':1}) ,
+         json.dumps( {'Handle':'item', 'URL':'url', 'Title':'title', 'Size':'size', 'IMGURL':'img_url', 'Price':'price'} ) ]
     empty_tag_profile = pd.DataFrame([temp], columns=['Email', 'unproc_data', 'recos'])
     empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, if_exists = 'replace')
 
@@ -634,3 +633,90 @@ def get_user(email, engine):
     
     # print(user_profile[user_profile!=0])
     return user_profile    
+
+
+def beautify_recos(recos, payload, engine):
+    """
+    returns required fields in dict/json format with the product's handle(S) as input,
+    dont forget to input list of products as input.
+    eg:
+    'Handle':item, 'URL':url, 'Title':title, 'Size':size, 'IMGURL':img_url, 'Price':price
+    """
+    table_name = 'products'
+    base_url = 'https://leaclothingco.com/products/'
+    size = get_size(payload)
+
+    res = []
+    for product in recos:
+        handle = product
+        try:
+            title = pd.read_sql_query(f"""select "Title" from "{table_name}" where "Handle" = '{product}' """,con=engine).iloc[0,0]
+        except Exception as e:
+            print(f'Invalid product found after inference: CHECK! {e}')
+            continue
+        img_url = pd.read_sql_query(f"""select "Image Src" from "{table_name}" where "Handle" = '{product}' """,con=engine).iloc[0,0]
+        values = pd.read_sql_query(f"""select "Variant Price" from "{table_name}" where "Handle" = '{product}' """,con=engine).values.flatten()
+        if len(set(values)) > 1:
+            price = f'Starts from {int(min(values))}'
+        else:
+            price = f'{int(values[0])}'
+        url = base_url + handle
+        res.append( { 'Handle':handle, 
+        'URL':url, 
+        'Title':title, 
+        'IMGURL':img_url, 
+        'Price':price, 
+        'Size':size } )
+    return res
+
+
+def get_size(payload):
+    """
+    returns a size L,M,XL,XXL based on body measurements from the provided payload data
+    """
+    size_chart = {"bust_size":{"32-33.5":"XS",
+                    "34-35":"S",
+                    "35.5-37":"M",
+                    "37.5-39.5":"L",
+                    "40-42":"XL",
+                    "42.5-45.5":"XXL",
+                    "46-48":"3XL",
+                    "48.5-50.5":"4XL",
+                    "51-53":"5XL"},
+        
+        "waist_size":{"23-24.5":"XS",
+                    "25-26.5":"S",
+                    "27-28.5":"M",
+                    "29-32":"L",
+                    "33.5-34.5":"XL",
+                    "35-37":"XXL",
+                    "37.5-39.5":"3XL",
+                    "40-42":"4XL",
+                    "42.5-44.5":"5XL"},
+
+        "hip_size":{"34-35.5":"XS",
+                    "36-37.5":"S",
+                    "38-39.5":"M",
+                    "40-42":"L",
+                    "42.5-44.5":"XL",
+                    "45-47.5":"XXL",
+                    "48-50.5":"3XL",
+                    "51-53":"4XL",
+                    "53.5-55.5":"5XL"}
+        }
+
+    size_dict = {}
+    size_list = [size_chart['bust_size'][payload["size"]['value']['Bust']] ,size_chart["waist_size"][payload["size"]['value']['Waist']] ,size_chart["hip_size"][payload["size"]['value']['Hips']]]
+    for  size in size_list:
+      if size not in size_dict:
+        size_dict[size] = 1
+      else:
+        size_dict[size] = size_dict[size]+1
+
+    size = max(size_dict, key= lambda x: size_dict[x])
+
+    if size_dict[size]==1:
+      return size_chart["waist_size"][payload["size"]['value']['Waist']] 
+    else:
+      return size
+    

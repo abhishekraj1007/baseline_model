@@ -1,7 +1,8 @@
-from helper_code import get_inference
-from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed
+from helper_code import beautify_recos, get_inference
+from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed, beautify_recos
 
 import os
+import json
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 
@@ -23,18 +24,14 @@ from flask_cors import CORS
 CORS(app)
 
 
-# get data from the html form and perform prediction
-
-
 @app.route("/check-user/<email>", methods = ['GET'])
 def get_old_recos(email):
     table_name = 'tags_profile_unproc'
     ## checking if profile exists
     with engine.connect() as con:
         data = con.execute(f"""select "recos" from "{table_name}" where "Email" = '{email}'""").fetchone()
-    
     #pending, modify later to get all required fields from 'Handle'
-    return jsonify(data[0].split(',')) if data else -1
+    return jsonify(json.loads(data[0])) if data else jsonify({})
 
 
 @app.route('/test', methods=['GET'])
@@ -46,12 +43,11 @@ def get_test():
 def recommend():
     data = request.json
     # print(f"Recommendations for the product: { base_url + title2handle[ data['product_title'] ] }")
-    res = get_inference(data['email'], data['product_title'], engine, reco_count = 8)
+    results = get_inference(data['email'], data['product_title'], engine, reco_count = 8)
 
-    return jsonify( [{'Handle':item, 'URL':base_url + item} for item in res] )
+    return jsonify( [{'Handle':item, 'URL':base_url + item} for item in results] )
 
-    
-# get data from the html form and perform prediction
+
 @app.route('/personalize',methods=['POST'])
 def personalize():
 
@@ -75,10 +71,14 @@ def personalize():
     tag_plus_style = get_tag_based_inference(tag_profile, 'productsXtags' , engine , title2handle = 'title2handle', ids = ids,
                                                                             standalone = False, n_recos = 12)
     
-    #Storing Unprocessed data for future in a different collection
-    store_user_unprocessed(email, data, recos= tag_plus_style, engine = engine)
 
-    return jsonify( [{'Handle':item, 'URL':base_url + item} for item in tag_plus_style] )
+    #getting all required fields
+    results = beautify_recos(tag_plus_style, data, engine)
+
+    #Storing Unprocessed data for future in a different collection
+    store_user_unprocessed(email, data, recos = results, engine = engine)
+
+    return jsonify( results )
 
 
 if __name__ == '__main__':
