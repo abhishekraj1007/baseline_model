@@ -8,9 +8,12 @@ import numpy as np
 from tqdm import tqdm
 import random
 from random import choices
+import json
 
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
+
+from description_helper import create_sim_desc
 
 
 def pre_process(engine):
@@ -452,29 +455,50 @@ def get_user_tag_profile(email, indices, engine):
         return pd.Series([])
 
 
+
 #pending
-def store_user_mongo_unprocessed(connection, data, email, db_name = 'lea_clothing_backend', collection_name = 'user_profiles'):
-    db = connection[db_name] #change the name of database as per your wish
-    collection = db[collection_name] #change the collection
-    d = dict()
-    d['_id'] = email
-    d.update(data)
-#     d.pop('email')
-    #checking if user already exists in mongodb
-    data = collection.find_one({'_id': email})
-    if data:
-        print(f'\nUser already exists in User_profiles, overwriting...\n')
-        collection.replace_one({'_id': email},d)
-    else:
-        collection.insert_one(d)
-        
-        
-def store_user_mongo(tag_profile, email, engine):
+def store_user_unprocessed(email, data, recos, engine):
+    """
+    1. email
+    2. data is out payload sent to be as it is
+    3. recos are the recommendations from the personalize part of the API
+    to be stored
+    """
+    table_name = 'tags_profile_unproc'
+
+    recos = ','.join(recos)
+
     ## checking if profile exists
     with engine.connect() as con:
-        data = con.execute(f"""select "Email" from "tags_profile" where "Email" = '{email}'""").fetchone()
+        user = con.execute(f"""select "Email" from "{table_name}" where "Email" = '{email}'""").fetchone()
+    if user:
+        print(f'Updating old Unprocessed data: {email[0]}\n')
+        with engine.connect() as con:
+            con.execute(f"""
+            UPDATE "{table_name}"
+            SET email = '{email}',
+            data = '{json.dumps(data)}',
+            recos = '{recos}',
+            WHERE "Email" = '{email}'
+            """)
+    else:
+        # Insert data as user profile not exists
+        with engine.connect() as con:
+            con.execute(f"""
+            insert into "{table_name}"
+            values ('{email}', '{json.dumps(data)}', '{recos}')
+            """)
+        print(f'New user added in unprocessed Data.')
+
+
+def store_user(tag_profile, email, engine):
+    table_name = 'tags_profile'
+
+    ## checking if profile exists
+    with engine.connect() as con:
+        data = con.execute(f"""select "Email" from "{table_name}" where "Email" = '{email}'""").fetchone()
     if data:
-        print(f'Updating old User profile : {data[0]}\n')
+        print(f'Updating old User profile : {data[0]}')
         s= ''
         for idx,value in zip(tag_profile.index, tag_profile.values):
             temp = idx + '=' + str(int(value)) + ','
@@ -482,7 +506,7 @@ def store_user_mongo(tag_profile, email, engine):
         s = s[:-1]
         with engine.connect() as con:
             con.execute(f"""
-            UPDATE "tags_profile"
+            UPDATE "{table_name}"
             SET {s}
             WHERE "Email" = '{email}'
             """)
@@ -490,7 +514,7 @@ def store_user_mongo(tag_profile, email, engine):
         # Insert data as user profile not exists
         with engine.connect() as con:
             con.execute(f"""
-            insert into "tags_profile"
+            insert into "{table_name}"
             values ('{email}', {str(tag_profile.values.tolist())[1:-1]} )
             """)
         print('New user tag profile added.')
@@ -509,7 +533,7 @@ def store_user_mongo(tag_profile, email, engine):
 
 #################################################################################
 
-def process_products(engine):
+def process_products(engine, create_sim = False):
     """
     Function to initialize things and will be used for retraining, other purpose it serves:
     1. To check if products data has changed, if yes creates new product and tags mappings stored in db.
@@ -521,6 +545,10 @@ def process_products(engine):
 
     table_name = 'products'
     products = pd.read_sql_query(f'select * from "{table_name}"',con=engine)
+
+    #create sim_desc for description based product similarity and stores in postgreDB
+    if create_sim == True:
+        create_sim_desc(products, engine)
 
     ## dropping duplicates
     products.drop_duplicates(subset='Title', keep="first", inplace= True)
@@ -554,6 +582,14 @@ def process_products(engine):
     
     with engine.connect() as con:
         con.execute("""ALTER TABLE "tags_profile" ADD PRIMARY KEY ("Email")""")
+    
+    #initialize tags_profile_unproc postgre table
+    temp = ['dummy@dummy', json.dumps({'a':1}) , 'a,b' ]
+    empty_tag_profile = pd.DataFrame([temp], columns=['Email', 'unproc_data', 'recos'])
+    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, if_exists = 'replace')
+
+    with engine.connect() as con:
+        con.execute("""ALTER TABLE "tags_profile_unproc" ADD PRIMARY KEY ("Email")""")
 
     print(f'\nSuccessfully processed products...')
 

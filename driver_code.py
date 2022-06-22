@@ -1,5 +1,5 @@
 from helper_code import get_inference
-from helper_code import  create_profile, store_user_mongo, get_tag_based_inference, store_user_mongo,store_user_mongo_unprocessed
+from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed
 
 import os
 from flask import Flask, request, jsonify
@@ -25,6 +25,18 @@ CORS(app)
 
 # get data from the html form and perform prediction
 
+
+@app.route("/check-user/<email>", methods = ['GET'])
+def get_old_recos(email):
+    table_name = 'tags_profile_unproc'
+    ## checking if profile exists
+    with engine.connect() as con:
+        data = con.execute(f"""select "recos" from "{table_name}" where "Email" = '{email}'""").fetchone()
+    
+    #pending, modify later to get all required fields from 'Handle'
+    return jsonify(data[0].split(',')) if data else -1
+
+
 @app.route('/test', methods=['GET'])
 def get_test():
     return "Success....."
@@ -32,9 +44,7 @@ def get_test():
 
 @app.route('/recommend',methods=['POST'])
 def recommend():
-
     data = request.json
-    
     # print(f"Recommendations for the product: { base_url + title2handle[ data['product_title'] ] }")
     res = get_inference(data['email'], data['product_title'], engine, reco_count = 8)
 
@@ -45,18 +55,14 @@ def recommend():
 @app.route('/personalize',methods=['POST'])
 def personalize():
 
-
     data = request.json
     data = data['finalQuizData']
     email = data['email']['value']
     
     tag_profile = create_profile(data, product_tags_filename='product_tags')
     
-    #Storing Unprocessed data for future in a different collection
-    # store_user_mongo_unprocessed(connection, data, email, db_name = 'lea_clothing_backend', collection_name = 'user_profiles')
-    
     #Storing processed user profile
-    store_user_mongo(tag_profile, email, engine)
+    store_user(tag_profile, email, engine)
 
     #if ids, StandAlone = False (also check inside function)
     #Getting Ids
@@ -68,7 +74,10 @@ def personalize():
     ## passing postgre engine object to get tag based inference using tag array
     tag_plus_style = get_tag_based_inference(tag_profile, 'productsXtags' , engine , title2handle = 'title2handle', ids = ids,
                                                                             standalone = False, n_recos = 12)
-                      
+    
+    #Storing Unprocessed data for future in a different collection
+    store_user_unprocessed(email, data, recos= tag_plus_style, engine = engine)
+
     return jsonify( [{'Handle':item, 'URL':base_url + item} for item in tag_plus_style] )
 
 

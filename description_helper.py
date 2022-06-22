@@ -1,19 +1,18 @@
-import pandas as pd
-import requests
-from bs4 import BeautifulSoup as bs
-import time
-import nltk
-from nltk.tokenize import word_tokenize
-nltk.download('punkt')
-import string
-from sklearn.metrics.pairwise import cosine_similarity
-# import pickle
+# import pandas as pd
+# import requests
+# from bs4 import BeautifulSoup as bs
+# import time
+# import nltk
+# from nltk.tokenize import word_tokenize
+# nltk.download('punkt')
+# import string
+# from sklearn.metrics.pairwise import cosine_similarity
+# # import pickle
 
-!pip install transformers
-!pip install -U sentence-transformers
-model_name = "bert-base-nli-mean-tokens"
-from sentence_transformers import SentenceTransformer
-model = SentenceTransformer(model_name)
+
+# model_name = "bert-base-nli-mean-tokens"
+# from sentence_transformers import SentenceTransformer
+# model = SentenceTransformer(model_name)
 
 
 def process_raw_desc(text):
@@ -31,8 +30,6 @@ def process_raw_desc(text):
 
 def create_sim_desc(products, engine):
     products_list = products.Handle.dropna().unique()
-    product2id = dict( (b,a) for a,b in enumerate(products_list) )
-    id2product = dict(enumerate(products_list))
 
     products_df = []
     for product in products_list:
