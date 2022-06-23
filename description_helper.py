@@ -1,18 +1,18 @@
-# import pandas as pd
-# import requests
-# from bs4 import BeautifulSoup as bs
-# import time
-# import nltk
-# from nltk.tokenize import word_tokenize
-# nltk.download('punkt')
-# import string
-# from sklearn.metrics.pairwise import cosine_similarity
-# # import pickle
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup as bs
+import time
+import nltk
+from nltk.tokenize import word_tokenize
+nltk.download('punkt')
+import string
+from sklearn.metrics.pairwise import cosine_similarity
+# import pickle
 
 
-# model_name = "bert-base-nli-mean-tokens"
-# from sentence_transformers import SentenceTransformer
-# model = SentenceTransformer(model_name)
+model_name = "bert-base-nli-mean-tokens"
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer(model_name)
 
 
 def process_raw_desc(text):

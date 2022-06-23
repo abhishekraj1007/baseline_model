@@ -120,7 +120,7 @@ def pre_process(engine):
 
 
 
-def process_products(engine, create_sim_desc = False):
+def process_products(engine, create_sim_desc = True):
     """
     Function to initialize things and will be used for retraining, other purpose it serves:
     1. To check if products data has changed, if yes creates new product and tags mappings stored in db.
@@ -317,58 +317,7 @@ def weighted_sample_without_replacement(arrs, weight_each_arr, k=2):
                 weights[i] = 0.0
                 indices.append(i)
     return [population[i] for i in indices]
-            
-            
-def get_similar_desc(product_handle):
-    sim_desc = pickle.load(open('sim_desc','rb'))
-    return sim_desc[product_handle]
-        
 
-def get_demographic_recos(product_handle, shippingprovincename = 'Delhi', orders_filename = 'orders_export_processed.csv'):
-    df = pd.read_csv(orders_filename)
-    
-    return_dict = Item_purchased_Together_statewise(df,shippingprovincename)
-    print(f'Demographic results for Location: {shippingprovincename} are included')
-    
-    res = return_dict.get( product_handle, [] )[:5]
-    if res:
-        return res
-    else:
-        print('No demographics data for the product found in the Locality')
-        return []  
-    
-    
-def Item_purchased_Together_statewise(df,state):
-    df = df[df['shippingprovincename']==state].reset_index()
-    vc = df.lineitemname.value_counts()
-    pairs = {}
-
-    for j,i in enumerate(vc.index.values):
-    # print(j,i)
-        users = df.loc[df.lineitemname == i, 'email'].unique()
-        vc2 = df.loc[(df.email.isin(users))&(df.lineitemname!=i),'lineitemname'].value_counts()
-        pairs[i] = vc2.index.to_list()[:5]
-    return pairs
-
-    
-# def model_fn(orders_filename, products_filename, tags_filename):
-
-
-#     users_filename, title2handle = pre_process(orders_filename, products_filename)
-    
-#     get_sim(users_filename)
-#     sim = pd.read_csv('sim.csv', index_col = 0, header = 0)
-#     users = pd.read_csv('users.csv', index_col = 0, header = 0)
-
-    
-#     base_url = 'https://leaclothingco.com/products/'
-#     try:
-#         productsXtags = pd.read_csv(tags_filename, header = 0, index_col = 0)
-#     except Exception as e:
-#         print(f'Products tag file cant be read: {e}')
-#         productsXtags = -1
-
-#     return  sim, users, avg_item_ratings, title2handle, base_url, productsXtags
 
 
 ###############################################################
@@ -543,20 +492,6 @@ def store_user(tag_profile, email, engine):
             values ('{email}', {str(tag_profile.values.tolist())[1:-1]} )
             """)
         print('New user tag profile added.\nand')
-        
-
-# def model_fn_2(products_filename):
-#     processed_filename, title2handle = create_product_tags_arr(products_filename)
-    
-#     productsXtags = pd.read_csv(processed_filename, header = 0, index_col = 0)
-    
-#     base_url = 'https://leaclothingco.com/products/'
-    
-#     return productsXtags, title2handle, base_url
-
-
-
-#################################################################################
 
 
 def get_user(email, engine):

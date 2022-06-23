@@ -4,22 +4,19 @@ from helper_code import  create_profile, store_user, get_tag_based_inference, st
 import os
 import json
 from flask import Flask, request, jsonify
-from dotenv import load_dotenv
-
-load_dotenv()
-
-from sqlalchemy import create_engine
-# import psycopg2
-
-# saving csv to postgresql
-engine = create_engine('postgresql://lea_clothing:leaclothing@lea-clothing-db.curvyi9vuuc9.ap-south-1.rds.amazonaws.com:5432/lea_clothing_db')
-base_url = 'https://leaclothingco.com/products/'
-
-
 app = Flask(__name__)
 
 from flask_cors import CORS
 CORS(app)
+
+from dotenv import load_dotenv
+load_dotenv()
+
+from sqlalchemy import create_engine
+# saving csv to postgresql
+engine = create_engine('postgresql://lea_clothing:leaclothing@lea-clothing-db.curvyi9vuuc9.ap-south-1.rds.amazonaws.com:5432/lea_clothing_db')
+base_url = 'https://leaclothingco.com/products/'
+
 
 
 @app.route("/check-user/<email>", methods = ['GET'])
