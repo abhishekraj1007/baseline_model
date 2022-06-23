@@ -18,37 +18,32 @@ from description_helper import create_sim_desc
 
 def pre_process(engine):
     #Read Orders file
-    orders = pd.read_sql_query(f'select * from "orders"',con=engine)
+    table_name = 'orders'
+    orders = pd.read_sql_query(f"""select * from "[{table_name}]" """,con=engine)
     #changing column names for convenience
     cols = orders.columns
-    cols = [''.join(item.title() for item in entity.split()) for entity in cols]
+    cols = [''.join(item for item in entity.split()) for entity in cols]
     orders.columns = cols
-
-    #mapping missing and improper data
-    map1 = orders.dropna(subset=['FinancialStatus'])[['Name','FinancialStatus']]
-    orders = pd.merge(orders, map1, on='Name', suffixes=('_old', ''))
-    map2 = orders.dropna(subset=['FulfillmentStatus'])[['Name','FulfillmentStatus']]
-    orders = pd.merge(orders, map2, on='Name', suffixes=('_old', ''))
 
     title2handle = pickle.load(open('title2handle','rb'))
     product_names = pickle.load(open('product_names','rb'))
 
     #processing product names(Title conflicts)
-    orders.LineitemName = orders.LineitemName.apply(lambda x: x.split(' - ')[0].strip())
+    orders.lineitemname = orders.lineitemname.apply(lambda x: x.split(' - ')[0].strip())
 
     # converting product Titles to their Handles
-    orders.LineitemName = orders.LineitemName.map(title2handle)
+    orders.lineitemname = orders.lineitemname.map(title2handle)
     
     #removing outdated products
-    orders = orders.loc[orders.LineitemName.isin(product_names)]
+    orders = orders.loc[orders.lineitemname.isin(product_names)]
 
     print(f'Preparing sim_demo...')
-    demo_df = orders.dropna(subset=['ShippingProvinceName'])
-    sim_demo = pd.DataFrame([],index = demo_df.ShippingProvinceName.unique().tolist(), columns=demo_df.LineitemName.unique().tolist())
-    for state,group in demo_df.groupby(['ShippingProvinceName'])['Email','LineitemName']:
-        for product in group.LineitemName.unique():
-            users = group.loc[group.LineitemName == product, 'Email'].unique()
-            sim_products = group.loc[(group.Email.isin(users))&(group.LineitemName!=product),'LineitemName'].value_counts().index.to_list()[:10]
+    demo_df = orders.dropna(subset=['shippingprovincename'])
+    sim_demo = pd.DataFrame([],index = demo_df.shippingprovincename.unique().tolist(), columns=demo_df.lineitemname.unique().tolist())
+    for state,group in demo_df.groupby(['shippingprovincename'])['email','lineitemname']:
+        for product in group.lineitemname.unique():
+            users = group.loc[group.lineitemname == product, 'email'].unique()
+            sim_products = group.loc[(group.email.isin(users))&(group.lineitemname!=product),'lineitemname'].value_counts().index.to_list()[:10]
             # print(state, product, sim_products, sep='::',end='\n\n')
             if sim_products:
                 sim_demo.loc[state,product] = ','.join(sim_products)
@@ -57,36 +52,31 @@ def pre_process(engine):
     sim_demo.to_sql('sim_demo', engine, index = True, if_exists = 'replace' )
 
     # Selecting required columns
-    req = ['Name', 'Email','LineitemName','LineitemFulfillmentStatus','FinancialStatus','FulfillmentStatus']
+    req = ['name', 'email','lineitemname','financialstatus','fulfillmentstatus']
     orders = orders[req]
-    
+
     #selecting carts with two or more products
-    order_counts = orders.Name.value_counts()
+    order_counts = orders.name.value_counts()
     counts_index = order_counts[order_counts > 1].index
 
     # taking 2 or more cart values
-    orders = orders.loc[orders.Name.isin(counts_index)]
-    
-    # converting product Titles to their Handles
-    orders['ProductHandle'] = orders.LineitemName
+    orders = orders.loc[orders.name.isin(counts_index)]
     
     #scoring user interactions
     rate_dict = {'paid':5, 'pending':4, 'voided':3, 'refunded':1}
-    orders['rating'] = orders.FinancialStatus.map(rate_dict)
+    orders['rating'] = orders.financialstatus.map(rate_dict)
     
-    orders = orders[['Email', 'ProductHandle', 'rating']]
+    orders = orders[['email', 'lineitemname', 'rating']]
     orders.reset_index(drop=True, inplace=True)
 
     # #preparing for missing products in training data to avoid errors at inference
-    # missing_ids = list(set(product_names) - set(orders.ProductHandle.unique()))
+    # missing_ids = list(set(product_names) - set(orders.lineitemname.unique()))
     # print(missing_ids)
     # for pid in missing_ids:
     #     orders.loc[len(orders.index)] = [str(pid) +'@Dummy', pid, 5]
     
     # pivoting tables for training data
-    orders = orders.pivot_table('rating',['Email'],'ProductHandle')
-    temp1 = orders.columns
-
+    orders = orders.pivot_table('rating',['email'],'lineitemname')
     orders = orders.reindex(columns=product_names)
     orders.fillna(0, inplace = True)
 
@@ -97,7 +87,7 @@ def pre_process(engine):
     
     ids = list(orders.columns)
     idx_to_ids = dict(enumerate(ids))
-    ids_to_idx = dict([(y,x) for x,y in idx_to_ids.items()])
+    # ids_to_idx = dict([(y,x) for x,y in idx_to_ids.items()])
 
     sim = np.zeros((len(ids),len(ids)))
     
@@ -127,6 +117,75 @@ def pre_process(engine):
     sim = pd.DataFrame(sim, columns=ids, index = ids)
     sim.to_sql('sim', engine, index = True, if_exists = 'replace' )
     print('Training Corr matrix finished...\nsaving weights...\n')
+
+
+
+def process_products(engine, create_sim_desc = False):
+    """
+    Function to initialize things and will be used for retraining, other purpose it serves:
+    1. To check if products data has changed, if yes creates new product and tags mappings stored in db.
+    2. Stores products tags in order, in order to be used later.
+    3. Same as (2) for Product names.
+    4. Dumps a Title to Header names mapping file.
+    5. initializes tags profile database with schema
+    """
+
+    table_name = 'products'
+    products = pd.read_sql_query(f'select * from "[{table_name}]"',con=engine)
+
+    #create sim_desc for description based product similarity and stores in postgreDB
+    if create_sim_desc == True:
+        create_sim_desc(products, engine)
+
+    ## dropping duplicates
+    products.drop_duplicates(subset='title', keep="first", inplace= True)
+    products.dropna(subset=['title','tags'], inplace = True)
+    products.reset_index(inplace=True, drop = True)
+    title2handle = dict(zip(products.title, products.handle))
+
+    products = products[['handle','tags']]
+    products.tags = products.tags.apply(lambda x: x.split(', ') if len(x)>1 else [])
+    products = products.explode('tags')
+
+    #drop rows having nan values as tags after the .explode step from list->rows
+    products.dropna(subset=['tags'], inplace = True)
+
+    products.tags = products.tags.apply(lambda x: ''.join( item.lower() for item in x.replace('-','').replace("'",'').split() ))
+    products['count'] = 1
+    products = products.pivot_table('count', ['handle'],'tags')
+    products.fillna(0, inplace = True)
+    
+    ## dropping products list, Tags list, title2handle dict and saving productsXtags into postgre db
+    product_names = products.index.to_list()
+    product_tags = products.columns.to_list()
+    pickle.dump(product_names, open('product_names','wb'))
+    pickle.dump(product_tags, open('product_tags','wb'))
+    pickle.dump(title2handle, open('title2handle','wb'))
+
+    products.to_sql(name ='productsXtags', con=engine, index = True, if_exists = 'replace' )
+
+    #pending check when to replace/append/delete
+    temp = ['dummy@dummy'] + [0] * len(product_tags)
+    empty_tag_profile = pd.DataFrame([temp], columns=['email'] + product_tags)
+    empty_tag_profile.to_sql('tags_profile', engine, index = False, if_exists = 'replace')
+    
+    with engine.connect() as con:
+        con.execute("""ALTER TABLE "tags_profile" ADD PRIMARY KEY ("email")""")
+    
+    #initialize tags_profile_unproc postgre table
+    temp = ['dummy@dummy', json.dumps({'a':1}) ,
+         json.dumps( {'handle':'item', 'URL':'url', 'title':'title', 'Size':'size', 'IMGURL':'img_url', 'Price':'price'} ) ]
+    empty_tag_profile = pd.DataFrame([temp], columns=['email', 'unproc_data', 'recos'])
+    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, if_exists = 'replace')
+
+    with engine.connect() as con:
+        con.execute("""ALTER TABLE "tags_profile_unproc" ADD PRIMARY KEY ("email")""")
+
+    print(f'\nSuccessfully processed products...')
+
+    ## pending
+    ## add a function to check change in products/tags (check by reading old file)
+
 
     
 def get_inference(email, product_title, engine, reco_count = 10, avg_item_ratings = 'avg_item_ratings', 
@@ -172,10 +231,10 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
 
 
     # Demographics Based
-    # 2. Explore User Profile
-    # pending, make a 2d table hardcoded and saved into db
+    # 2. Explore customers data and show frequently bought products in the customer's province
     try:
-        province = pd.read_sql_query(f"""select "Province" from customers where "Email" = '{email}' """,con=engine)
+        customer_table = 'customers'
+        province = pd.read_sql_query(f"""select "province" from "[{customer_table}]" where "email" = '{email}' """,con=engine)
         if not province.empty:
             province = province.iloc[0,0]
             data = pd.read_sql_query(f"""select "{product_handle}" from sim_demo where "index" = '{province}' """, con=engine)
@@ -195,10 +254,9 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
     # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
     part3 = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
     
-
     # 4. get_similar descriptions based products
     try:
-        data = pd.read_sql_query(f"""select "sim_products" from sim_desc where "product" = '{product_handle}' """, con = engine)
+        data = pd.read_sql_query(f"""select "sim_products" from "sim_desc" where "product" = '{product_handle}' """, con = engine)
         if not data.empty:
             part4 = data.iloc[0,0].split(',')[:5]
         else:
@@ -209,7 +267,7 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
 
 
     # 5. get_tag_based_personalized recommendations else show similar tag based products
-    tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('Handle', drop = True)
+    tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('handle', drop = True)
     #fetching user attributes from mongodb
     tag_profile = get_user_tag_profile(email, tag_array.columns, engine)
 
@@ -219,7 +277,6 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
                             title2handle = 'title2handle', standalone = True, n_recos = 5)
     else:
         print(f'User tag profile not found')
-        #pending
         tag_profile = tag_array.loc[tag_array.index == product_handle ].iloc[-1,:]
         part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine ,
                         title2handle = 'title2handle', standalone = True, n_recos = 6)[1:]
@@ -267,11 +324,11 @@ def get_similar_desc(product_handle):
     return sim_desc[product_handle]
         
 
-def get_demographic_recos(product_handle, ShippingProvinceName = 'Delhi', orders_filename = 'orders_export_processed.csv'):
+def get_demographic_recos(product_handle, shippingprovincename = 'Delhi', orders_filename = 'orders_export_processed.csv'):
     df = pd.read_csv(orders_filename)
     
-    return_dict = Item_purchased_Together_statewise(df,ShippingProvinceName)
-    print(f'Demographic results for Location: {ShippingProvinceName} are included')
+    return_dict = Item_purchased_Together_statewise(df,shippingprovincename)
+    print(f'Demographic results for Location: {shippingprovincename} are included')
     
     res = return_dict.get( product_handle, [] )[:5]
     if res:
@@ -282,14 +339,14 @@ def get_demographic_recos(product_handle, ShippingProvinceName = 'Delhi', orders
     
     
 def Item_purchased_Together_statewise(df,state):
-    df = df[df['ShippingProvinceName']==state].reset_index()
-    vc = df.LineitemName.value_counts()
+    df = df[df['shippingprovincename']==state].reset_index()
+    vc = df.lineitemname.value_counts()
     pairs = {}
 
     for j,i in enumerate(vc.index.values):
     # print(j,i)
-        users = df.loc[df.LineitemName == i, 'Email'].unique()
-        vc2 = df.loc[(df.Email.isin(users))&(df.LineitemName!=i),'LineitemName'].value_counts()
+        users = df.loc[df.lineitemname == i, 'email'].unique()
+        vc2 = df.loc[(df.email.isin(users))&(df.lineitemname!=i),'lineitemname'].value_counts()
         pairs[i] = vc2.index.to_list()[:5]
     return pairs
 
@@ -317,34 +374,6 @@ def Item_purchased_Together_statewise(df,state):
 ###############################################################
 ###############################################################
 #API 2
-
-
-def create_product_tags_arr(filename = 'products_export_1.csv'):
-    """
-    To create products X tags array to be used for matrix multiplication for cosine similarity afterwards
-    """
-    products = pd.read_csv(filename)
-    
-    #dropping duplicates
-    products.drop_duplicates(subset='Title', keep="first", inplace= True)
-    products.dropna(subset=['Title','Tags'], inplace = True)
-    products.reset_index(inplace=True, drop = True)
-    title2handle = dict(zip(products.Title, products.Handle))
-    print(products.shape)
-    
-    products = products[['Handle','Tags']]
-
-    products.Tags = products.Tags.apply(lambda x: x.split(', '))
-    products = products.explode('Tags')
-    products.Tags = products.Tags.apply(lambda x: ''.join( item.lower() for item in x.replace('-','').split() ))
-    products['count'] = 1
-
-    products = products.pivot_table('count', ['Handle'],'Tags')
-    products.fillna(0, inplace = True)
-    
-    processed_filename = 'productsXtags.csv'
-    products.to_csv(processed_filename, header = True, index = True)
-    return processed_filename, title2handle
 
 
 def create_profile(data, product_tags_filename = 'product_tags'):
@@ -390,7 +419,7 @@ def create_profile(data, product_tags_filename = 'product_tags'):
             for tag in values:
                 value = uncomfortable_dict[tag]
                 
-                #pending verify tags coming from payload in the end 
+                # VERIFY tags coming from payload in the end 
                 tags.update(dict( (
                     ''.join( item.lower() for item in key.replace('-','').replace("'",'').split() ), value * weight) for key,value in value.items() ))
 #             print('uncomfortable', values, tags)
@@ -416,7 +445,7 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
     """
     note that product ids must be in list format
     """
-    tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('Handle', drop = True)
+    tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('handle', drop = True)
 
     ## get actual tag based similar products
     tag_res = get_tags_sim(tag_profile, tag_array, n = n_recos)
@@ -446,7 +475,7 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
 
 def get_user_tag_profile(email, indices, engine):
     with engine.connect() as con:
-        values = con.execute(f"""select * from "tags_profile" where "Email" = '{email}'""").fetchone()
+        values = con.execute(f"""select * from "tags_profile" where "email" = '{email}'""").fetchone()
     
     if values:
         #skipping email and creating profile with the sparse values
@@ -455,8 +484,6 @@ def get_user_tag_profile(email, indices, engine):
         return pd.Series([])
 
 
-
-#pending
 def store_user_unprocessed(email, data, recos, engine):
     """
     1. email
@@ -468,16 +495,16 @@ def store_user_unprocessed(email, data, recos, engine):
 
     ## checking if profile exists
     with engine.connect() as con:
-        user = con.execute(f"""select "Email" from "{table_name}" where "Email" = '{email}'""").fetchone()
+        user = con.execute(f"""select "email" from "{table_name}" where "email" = '{email}'""").fetchone()
     if user:
         print(f'Updating old Unprocessed data: {user[0]}')
         with engine.connect() as con:
             con.execute(f"""
             UPDATE "{table_name}"
-            SET "Email" = '{email}',
+            SET "email" = '{email}',
             "unproc_data" = '{json.dumps(data)}',
             "recos" = '{json.dumps(recos)}'
-            WHERE "Email" = '{email}'
+            WHERE "email" = '{email}'
             """)
     else:
         # Insert data as user profile not exists
@@ -494,7 +521,7 @@ def store_user(tag_profile, email, engine):
 
     ## checking if profile exists
     with engine.connect() as con:
-        data = con.execute(f"""select "Email" from "{table_name}" where "Email" = '{email}'""").fetchone()
+        data = con.execute(f"""select "email" from "{table_name}" where "email" = '{email}'""").fetchone()
     if data:
         print(f'Updating current User profile : {data[0]}\nand')
         s= ''
@@ -506,7 +533,7 @@ def store_user(tag_profile, email, engine):
             con.execute(f"""
             UPDATE "{table_name}"
             SET {s}
-            WHERE "Email" = '{email}'
+            WHERE "email" = '{email}'
             """)
     else:
         # Insert data as user profile not exists
@@ -531,105 +558,37 @@ def store_user(tag_profile, email, engine):
 
 #################################################################################
 
-def process_products(engine, create_sim = False):
-    """
-    Function to initialize things and will be used for retraining, other purpose it serves:
-    1. To check if products data has changed, if yes creates new product and tags mappings stored in db.
-    2. Stores products tags in order, in order to be used later.
-    3. Same as (2) for Product names.
-    4. Dumps a Title to Header names mapping file.
-    5. initializes tags profile database with schema
-    """
-
-    table_name = 'products'
-    products = pd.read_sql_query(f'select * from "{table_name}"',con=engine)
-
-    #create sim_desc for description based product similarity and stores in postgreDB
-    if create_sim == True:
-        create_sim_desc(products, engine)
-
-    ## dropping duplicates
-    products.drop_duplicates(subset='Title', keep="first", inplace= True)
-    products.dropna(subset=['Title','Tags'], inplace = True)
-    products.reset_index(inplace=True, drop = True)
-    title2handle = dict(zip(products.Title, products.Handle))
-
-    print(products.shape)
-    
-    products = products[['Handle','Tags']]
-    products.Tags = products.Tags.apply(lambda x: x.split(', '))
-    products = products.explode('Tags')
-    products.Tags = products.Tags.apply(lambda x: ''.join( item.lower() for item in x.replace('-','').replace("'",'').split() ))
-    products['count'] = 1
-    products = products.pivot_table('count', ['Handle'],'Tags')
-    products.fillna(0, inplace = True)
-    
-    ## dropping products list, Tags list, title2handle dict and saving productsXtags into postgre db
-    product_names = products.index.to_list()
-    product_tags = products.columns.to_list()
-    pickle.dump(product_names, open('product_names','wb'))
-    pickle.dump(product_tags, open('product_tags','wb'))
-    pickle.dump(title2handle, open('title2handle','wb'))
-    products.to_sql('productsXtags', engine, index = True, if_exists = 'replace' )
-
-
-    #pending check when to replace/append/delete
-    temp = ['dummy@dummy'] + [0] * len(product_tags)
-    empty_tag_profile = pd.DataFrame([temp], columns=['Email'] + product_tags)
-    empty_tag_profile.to_sql('tags_profile', engine, index = False, if_exists = 'replace')
-    
-    with engine.connect() as con:
-        con.execute("""ALTER TABLE "tags_profile" ADD PRIMARY KEY ("Email")""")
-    
-    #initialize tags_profile_unproc postgre table
-    temp = ['dummy@dummy', json.dumps({'a':1}) ,
-         json.dumps( {'Handle':'item', 'URL':'url', 'Title':'title', 'Size':'size', 'IMGURL':'img_url', 'Price':'price'} ) ]
-    empty_tag_profile = pd.DataFrame([temp], columns=['Email', 'unproc_data', 'recos'])
-    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, if_exists = 'replace')
-
-    with engine.connect() as con:
-        con.execute("""ALTER TABLE "tags_profile_unproc" ADD PRIMARY KEY ("Email")""")
-
-    print(f'\nSuccessfully processed products...')
-
-    ## pending
-    ## add a function to check change in products/tags (check by reading old file)
-
-
 
 def get_user(email, engine):
     """
     to get user order history at runtime(get_inference) to be used with .sim matrix -> doctorized product ratings for inference
     """
-    orders = pd.read_sql_query(f"""select * from "orders" where "Email" = '{email}'""",con=engine)
+    table_name = 'orders'
+    orders = pd.read_sql_query(f"""select * from "[{table_name}]" where "email" = '{email}'""",con=engine)
     cols = orders.columns
-    cols = [''.join(item.title() for item in entity.split()) for entity in cols]
+    cols = [''.join(item for item in entity.split()) for entity in cols]
     orders.columns = cols
-    #mapping missing and improper data
-    map1 = orders.dropna(subset=['FinancialStatus'])[['Name','FinancialStatus']]
-    orders = pd.merge(orders, map1, on='Name', suffixes=('_old', ''))
-    map2 = orders.dropna(subset=['FulfillmentStatus'])[['Name','FulfillmentStatus']]
-    orders = pd.merge(orders, map2, on='Name', suffixes=('_old', ''))
+
     # Selecting required columns
-    req = ['Name', 'Email','LineitemName','LineitemFulfillmentStatus','FinancialStatus','FulfillmentStatus']
+    req = ['name', 'email','lineitemname','financialstatus','fulfillmentstatus']
     orders = orders[req]
     #processing product names(Handle- Title conflicts)
-    orders.LineitemName = orders.LineitemName.apply(lambda x: x.split(' - ')[0].strip())
+    orders.lineitemname = orders.lineitemname.apply(lambda x: x.split(' - ')[0].strip())
     title2handle = pickle.load(open('title2handle','rb'))
     # converting product Titles to their Handles
-    orders.LineitemName = orders.LineitemName.map(title2handle)
+    orders.lineitemname = orders.lineitemname.map(title2handle)
     #loading handle names
     product_names = pickle.load(open('product_names','rb'))
     #removing outdated products
-    orders = orders.loc[orders.LineitemName.isin(product_names)]
+    orders = orders.loc[orders.lineitemname.isin(product_names)]
     if len(orders) == 0:
         return pd.Series([])
     
     # if data is not empty proceed further
     user_profile = pd.Series(index = product_names, dtype = 'int')
     rate_dict = {'paid':5, 'pending':4, 'voided':3, 'refunded':1}
-    orders['rating'] = orders.FinancialStatus.map(rate_dict)
-    user_profile[orders.LineitemName.values] = orders.rating.values
+    orders['rating'] = orders.financialstatus.map(rate_dict)
+    user_profile[orders.lineitemname.values] = orders.rating.values
     
     # print(user_profile[user_profile!=0])
     return user_profile    
@@ -650,12 +609,13 @@ def beautify_recos(recos, payload, engine):
     for product in recos:
         handle = product
         try:
-            title = pd.read_sql_query(f"""select "Title" from "{table_name}" where "Handle" = '{product}' """,con=engine).iloc[0,0]
+            # square brackets [ ] are used to refer to a SQL view
+            title = pd.read_sql_query(f"""select "title" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
         except Exception as e:
             print(f'Invalid product found after inference: CHECK! {e}')
             continue
-        img_url = pd.read_sql_query(f"""select "Image Src" from "{table_name}" where "Handle" = '{product}' """,con=engine).iloc[0,0]
-        values = pd.read_sql_query(f"""select "Variant Price" from "{table_name}" where "Handle" = '{product}' """,con=engine).values.flatten()
+        img_url = pd.read_sql_query(f"""select "img_url" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
+        values = pd.read_sql_query(f"""select "price" from "[{table_name}]" where "handle" = '{product}' """,con=engine).values.flatten()
         if len(set(values)) > 1:
             price = f'Starts from {int(min(values))}'
         else:

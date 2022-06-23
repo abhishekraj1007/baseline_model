@@ -10,11 +10,9 @@ load_dotenv()
 
 from sqlalchemy import create_engine
 # import psycopg2
-username = "postgres"
-password = "vivek"
 
 # saving csv to postgresql
-engine = create_engine('postgresql://postgres:vivek@localhost:5432/test')
+engine = create_engine('postgresql://lea_clothing:leaclothing@lea-clothing-db.curvyi9vuuc9.ap-south-1.rds.amazonaws.com:5432/lea_clothing_db')
 base_url = 'https://leaclothingco.com/products/'
 
 
@@ -29,8 +27,9 @@ def get_old_recos(email):
     table_name = 'tags_profile_unproc'
     ## checking if profile exists
     with engine.connect() as con:
-        data = con.execute(f"""select "recos" from "{table_name}" where "Email" = '{email}'""").fetchone()
-    #pending, modify later to get all required fields from 'Handle'
+        data = con.execute(f"""select "recos" from "{table_name}" where "email" = '{email}'""").fetchone()
+    
+    #all required fields are being returned already from the past stored results
     return jsonify(json.loads(data[0])) if data else jsonify({})
 
 
