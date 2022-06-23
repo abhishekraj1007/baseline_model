@@ -120,7 +120,7 @@ def pre_process(engine):
 
 
 
-def process_products(engine, create_sim_desc = True):
+def process_products(engine, sim_desc_flag = True):
     """
     Function to initialize things and will be used for retraining, other purpose it serves:
     1. To check if products data has changed, if yes creates new product and tags mappings stored in db.
@@ -134,7 +134,7 @@ def process_products(engine, create_sim_desc = True):
     products = pd.read_sql_query(f'select * from "[{table_name}]"',con=engine)
 
     #create sim_desc for description based product similarity and stores in postgreDB
-    if create_sim_desc == True:
+    if sim_desc_flag == True:
         create_sim_desc(products, engine)
 
     ## dropping duplicates
