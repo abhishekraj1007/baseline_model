@@ -177,7 +177,7 @@ def process_products(engine, sim_desc_flag = False):
     temp = ['dummy@dummy', json.dumps({'a':1}) ,
          json.dumps( {'handle':'item', 'URL':'url', 'title':'title', 'Size':'size', 'IMGURL':'img_url', 'Price':'price'} ) ]
     empty_tag_profile = pd.DataFrame([temp], columns=['email', 'unproc_data', 'recos'])
-    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, if_exists = 'ignore')
+    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, if_exists = 'replace')
 
     with engine.connect() as con:
         con.execute("""ALTER TABLE "tags_profile_unproc" ADD PRIMARY KEY ("email")""")

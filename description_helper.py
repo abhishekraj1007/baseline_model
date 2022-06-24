@@ -74,6 +74,7 @@ def create_sim_desc(products, engine):
     sim_desc = pd.Series(sim_dict, index = sim_dict.keys()).reset_index().rename(columns = {'index':'product',0:'sim_products'})
 
     sim_desc.to_sql('sim_desc', engine, index = False, if_exists = 'replace' )
+    print('SIM_DESC successfully created..')
 
 
 
