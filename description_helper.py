@@ -29,8 +29,9 @@ def process_raw_desc(text):
 
 
 def create_sim_desc(products, engine):
-    products_list = products.Handle.dropna().unique()
-
+    products_list = products.handle.dropna().unique()
+    
+    print('Started scraping products..')
     products_df = []
     for product in products_list:
         base_url = 'https://leaclothingco.com/products/'

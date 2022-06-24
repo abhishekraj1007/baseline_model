@@ -120,7 +120,7 @@ def pre_process(engine):
 
 
 
-def process_products(engine, sim_desc_flag = True):
+def process_products(engine, sim_desc_flag = False):
     """
     Function to initialize things and will be used for retraining, other purpose it serves:
     1. To check if products data has changed, if yes creates new product and tags mappings stored in db.
@@ -176,7 +176,7 @@ def process_products(engine, sim_desc_flag = True):
     temp = ['dummy@dummy', json.dumps({'a':1}) ,
          json.dumps( {'handle':'item', 'URL':'url', 'title':'title', 'Size':'size', 'IMGURL':'img_url', 'Price':'price'} ) ]
     empty_tag_profile = pd.DataFrame([temp], columns=['email', 'unproc_data', 'recos'])
-    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, if_exists = 'replace')
+    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, if_exists = 'ignore')
 
     with engine.connect() as con:
         con.execute("""ALTER TABLE "tags_profile_unproc" ADD PRIMARY KEY ("email")""")
@@ -185,7 +185,6 @@ def process_products(engine, sim_desc_flag = True):
 
     ## pending
     ## add a function to check change in products/tags (check by reading old file)
-
 
     
 def get_inference(email, product_title, engine, reco_count = 10, avg_item_ratings = 'avg_item_ratings', 

@@ -1,5 +1,6 @@
 from helper_code import beautify_recos, get_inference
 from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed, beautify_recos
+from helper_code import process_products, pre_process
 
 import os
 import json
@@ -79,7 +80,11 @@ def personalize():
 
 if __name__ == '__main__':
     try:
-        app.run(port= os.environ.get('HEROKU_PORT', 5000) )
+        #to check if main getting executed
+        print(f'\n---Entered main---\n')
+        process_products(engine, sim_desc_flag=True)
+        pre_process(engine)
+        app.run(port= os.environ.get('AWS_PORT', 5000) )
     except KeyboardInterrupt:
         print(f'Server closed.')
     except Exception as e:
