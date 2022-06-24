@@ -7,6 +7,7 @@ from nltk.tokenize import word_tokenize
 nltk.download('punkt')
 import string
 from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
 # import pickle
 
 
@@ -31,9 +32,9 @@ def process_raw_desc(text):
 def create_sim_desc(products, engine):
     products_list = products.handle.dropna().unique()
     
-    print('Started scraping products..')
+    print('Started scraping products..\nwill take some time, please wait')
     products_df = []
-    for product in products_list:
+    for product in tqdm(products_list):
         base_url = 'https://leaclothingco.com/products/'
         url = base_url + product
         try:

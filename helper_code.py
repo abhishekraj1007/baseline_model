@@ -2,6 +2,7 @@
 ## Check for if correct results and order is being returned after sampling results from the subresults
 
 import warnings
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import numpy as np
@@ -614,3 +615,7 @@ def get_size(payload):
     else:
       return size
     
+
+def model_fn(engine):
+    process_products(engine, sim_desc_flag=True)
+    pre_process(engine)

@@ -1,6 +1,6 @@
 from helper_code import beautify_recos, get_inference
 from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed, beautify_recos
-from helper_code import process_products, pre_process
+from helper_code import model_fn
 
 import os
 import json
@@ -14,11 +14,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from sqlalchemy import create_engine
-# saving csv to postgresql
-engine = create_engine('postgresql://lea_clothing:leaclothing@lea-clothing-db.curvyi9vuuc9.ap-south-1.rds.amazonaws.com:5432/lea_clothing_db')
+username= 'lea_clothing'
+password = 'leaclothing'
+hostname = 'lea-clothing-db.curvyi9vuuc9.ap-south-1.rds.amazonaws.com'
+postgre_port = '5432'
+db_name = 'lea_clothing_db'
+# opening connection to postgre
+engine = create_engine(f'postgresql://{username}:{password}@{hostname}:{postgre_port}/{db_name}')
 base_url = 'https://leaclothingco.com/products/'
 
-
+#train model for the first time
+model_fn(engine=engine)
 
 @app.route("/check-user/<email>", methods = ['GET'])
 def get_old_recos(email):
@@ -80,10 +86,6 @@ def personalize():
 
 if __name__ == '__main__':
     try:
-        #to check if main getting executed
-        print(f'\n---Entered main---\n')
-        process_products(engine, sim_desc_flag=True)
-        pre_process(engine)
         app.run(port= os.environ.get('AWS_PORT', 5000) )
     except KeyboardInterrupt:
         print(f'Server closed.')
