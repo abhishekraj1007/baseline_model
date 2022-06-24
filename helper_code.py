@@ -254,6 +254,7 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
     # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
     part3 = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
     
+    
     # 4. get_similar descriptions based products
     try:
         data = pd.read_sql_query(f"""select "sim_products" from "sim_desc" where "product" = '{product_handle}' """, con = engine)
