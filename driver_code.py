@@ -1,83 +1,87 @@
-from helper_code import pre_process, get_sim, get_inference, model_fn
-from helper_code import create_product_tags_arr, create_profile, store_user_mongo, get_tags_sim, get_tag_based_inference, model_fn_2, store_user_mongo,store_user_mongo_unprocessed
+from helper_code import beautify_recos, get_inference
+from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed, beautify_recos
 
 import os
-import pymongo
-import flask
-from flask import Flask, render_template, request, jsonify
-from dotenv import load_dotenv
-from flask_cors import CORS
+import json
+from flask import Flask, request, jsonify
+app = Flask(__name__)
 
+from flask_cors import CORS
+CORS(app)
+
+from dotenv import load_dotenv
 load_dotenv()
 
-app = Flask(__name__)
-CORS(app)
-#activating pymongo collection
-connection = pymongo.MongoClient("mongodb+srv://my_jurisdiction:P9N18hMrpvSWJiEy@graphql-cluster.lsiwf1p.mongodb.net/?retryWrites=true&w=majority")
+from sqlalchemy import create_engine
+# saving csv to postgresql
+engine = create_engine('postgresql://lea_clothing:leaclothing@lea-clothing-db.curvyi9vuuc9.ap-south-1.rds.amazonaws.com:5432/lea_clothing_db')
+base_url = 'https://leaclothingco.com/products/'
 
 
-# Load model 1
-sim, users, avg_item_ratings, title2handle, base_url, tag_array = model_fn(orders_filename = 'orders_export_1.csv', products_filename='products_export_1.csv', tags_filename = 'productsXtags.csv')
 
-#Load model 2
-productsXtags, title2handle, base_url = model_fn_2(products_filename = 'products_export_1.csv')
+@app.route("/check-user/<email>", methods = ['GET'])
+def get_old_recos(email):
+    table_name = 'tags_profile_unproc'
+    ## checking if profile exists
+    with engine.connect() as con:
+        data = con.execute(f"""select "recos" from "{table_name}" where "email" = '{email}'""").fetchone()
+    
+    #all required fields are being returned already from the past stored results
+    return jsonify(json.loads(data[0])) if data else jsonify({})
 
-
-# get data from the html form and perform prediction
 
 @app.route('/test', methods=['GET'])
 def get_test():
     return "Success....."
 
+
 @app.route('/recommend',methods=['POST'])
 def recommend():
-    
     data = request.json
-    
-    print(f"Recommendations for the product: { base_url + title2handle[ data['product_title'] ] }")
-    res = get_inference(data['email'], data['product_title'], sim, users, avg_item_ratings, title2handle, tag_array, connection)
-    
-    return jsonify( [{'Handle':item, 'URL':base_url + item} for item in res] )
+    # print(f"Recommendations for the product: { base_url + title2handle[ data['product_title'] ] }")
+    results = get_inference(data['email'], data['product_title'], engine, reco_count = 8)
+
+    return jsonify( [{'Handle':item, 'URL':base_url + item} for item in results] )
 
 
-    
-# get data from the html form and perform prediction
 @app.route('/personalize',methods=['POST'])
 def personalize():
-    print('check......')
 
     data = request.json
     data = data['finalQuizData']
     email = data['email']['value']
     
-    
-    tag_profile = create_profile(data, productsXtags_arr = productsXtags)
-    
-    #Storing Unprocessed data for future in a different collection
-    store_user_mongo_unprocessed(connection, data, email, db_name = 'lea_clothing_backend', collection_name = 'user_profiles')
+    tag_profile = create_profile(data, product_tags_filename='product_tags')
     
     #Storing processed user profile
-    store_user_mongo(connection, tag_profile, email, db_name = 'lea_clothing_backend', collection_name = 'processed_user_profiles')
-    
+    store_user(tag_profile, email, engine)
+
+    #if ids, StandAlone = False (also check inside function)
     #Getting Ids
     if data.get('styles', []):
         ids = data['styles']['value']
     else:
         ids = []
     
-    tag_plus_style = get_tag_based_inference(tag_profile, tag_array = productsXtags, title2handle = title2handle, ids = ids,
-                                                                            standalone = False, n_recos = 15)
-                        
+    ## passing postgre engine object to get tag based inference using tag array
+    tag_plus_style = get_tag_based_inference(tag_profile, 'productsXtags' , engine , title2handle = 'title2handle', ids = ids,
+                                                                            standalone = False, n_recos = 12)
     
-    return jsonify( [{'Handle':item, 'URL':base_url + item} for item in tag_plus_style] )
+
+    #getting all required fields
+    results = beautify_recos(tag_plus_style, data, engine)
+
+    #Storing Unprocessed data for future in a different collection
+    store_user_unprocessed(email, data, recos = results, engine = engine)
+
+    return jsonify( results )
 
 
 if __name__ == '__main__':
-    while True:
-        try:
-            app.run(port= os.environ.get('HEROKU_PORT', 5000) )
-        except Exception as e:
-            print('Code crashed once due to:\n{e}')
-            continue
-    
+    try:
+        app.run(port= os.environ.get('HEROKU_PORT', 5000) )
+    except KeyboardInterrupt:
+        print(f'Server closed.')
+    except Exception as e:
+        print('\nCODE CRASHED once due to: {e}\n')
     
