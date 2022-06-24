@@ -177,7 +177,7 @@ def process_products(engine, sim_desc_flag = False):
     temp = ['dummy@dummy', json.dumps({'a':1}) ,
          json.dumps( {'handle':'item', 'URL':'url', 'title':'title', 'Size':'size', 'IMGURL':'img_url', 'Price':'price'} ) ]
     empty_tag_profile = pd.DataFrame([temp], columns=['email', 'unproc_data', 'recos'])
-    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, if_exists = 'ignore')
+    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, if_exists = 'replace')
 
     with engine.connect() as con:
         con.execute("""ALTER TABLE "tags_profile_unproc" ADD PRIMARY KEY ("email")""")
@@ -253,6 +253,7 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
     # 3. show content based recos
     # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
     part3 = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
+    
     
     # 4. get_similar descriptions based products
     try:
