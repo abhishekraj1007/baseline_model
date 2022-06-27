@@ -3,21 +3,12 @@ import requests
 from bs4 import BeautifulSoup as bs
 import time
 import nltk
-import importlib
-
-try:
-    nltk.data.find('punkt')
-except LookupError:
-    print('\nNLTK punct not found, redownloading...')
-    nltk.download('punkt')
-    importlib.reload(nltk)
-
+nltk.download('punkt')
 from nltk.tokenize import word_tokenize
 
 import string
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
-
 
 model_name = "bert-base-nli-mean-tokens"
 from sentence_transformers import SentenceTransformer
