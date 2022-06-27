@@ -705,5 +705,5 @@ def filter_results(recos, prices, engine):
     return results
 
 def model_fn(engine):
-    process_products(engine, sim_desc_flag=True)
+    process_products(engine, sim_desc_flag=False)
     pre_process(engine)
