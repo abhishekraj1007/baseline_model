@@ -86,7 +86,7 @@ def personalize():
 
     #filtering results based on user given price range
     price_dict = data["spend categories"]["value"]
-    filtered_recos = filter_results(tag_plus_style, prices = price_dict)
+    filtered_recos = filter_results(tag_plus_style, prices = price_dict,engine = engine)
 
     #getting all required fields
     beautified_results = beautify_recos(filtered_recos, engine, payload=data, take_size = True)
@@ -95,7 +95,7 @@ def personalize():
     store_user_unprocessed(email, data = data_to_store, recos = beautified_results, engine = engine)
 
     return jsonify( beautified_results )
-
+    
 
 if __name__ == '__main__':
     try:
