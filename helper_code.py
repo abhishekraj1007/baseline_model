@@ -14,13 +14,13 @@ import json
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
 
-from description_helper import create_sim_desc
-
-
 def pre_process(engine):
     #Read Orders file
     table_name = 'orders'
     orders = pd.read_sql_query(f"""select * from "[{table_name}]" """,con=engine)
+
+    print(f'Started processing {table_name} for creating users:')
+
     #changing column names for convenience
     cols = orders.columns
     cols = [''.join(item for item in entity.split()) for entity in cols]
@@ -38,7 +38,7 @@ def pre_process(engine):
     #removing outdated products
     orders = orders.loc[orders.lineitemname.isin(product_names)]
 
-    print(f'Preparing sim_demo...')
+    print(f'Preparing sim_demographics (sim_demo)')
     demo_df = orders.dropna(subset=['shippingprovincename'])
     sim_demo = pd.DataFrame([],index = demo_df.shippingprovincename.unique().tolist(), columns=demo_df.lineitemname.unique().tolist())
     for state,group in demo_df.groupby(['shippingprovincename'])['email','lineitemname']:
@@ -83,19 +83,21 @@ def pre_process(engine):
 
     #dumping avg_item_ratings
     pickle.dump( orders.mean(axis = 0), open('avg_item_ratings','wb'))
-    print(f' users processing done...')
+    print(f'Users processing done.\n')
     #Finished processing orders ^
     
     ids = list(orders.columns)
     idx_to_ids = dict(enumerate(ids))
     # ids_to_idx = dict([(y,x) for x,y in idx_to_ids.items()])
 
+    print(f'initializing corr matrix...')
     sim = np.zeros((len(ids),len(ids)))
     
     #Making correlation matrix using ADJUSTED COSINE SIMILARITY
 
     avg_item_ratings = orders.values.mean(axis = 1)
 #     avg_item_ratings = np.true_divide(orders.sum(axis = 1),(orders!=0).sum(axis = 1))
+
 
     for row in tqdm(range(len(ids))):
         for col in range(len(ids)):
@@ -117,7 +119,7 @@ def pre_process(engine):
     
     sim = pd.DataFrame(sim, columns=ids, index = ids)
     sim.to_sql('sim', engine, index = True, if_exists = 'replace' )
-    print('Training Corr matrix finished...\nsaving weights...\n')
+    print('Training Corr matrix finished,\nSaving weights.\n')
 
 
 
@@ -133,9 +135,12 @@ def process_products(engine, sim_desc_flag = False):
 
     table_name = 'products'
     products = pd.read_sql_query(f'select * from "[{table_name}]"',con=engine)
+    print(f'Started processing {table_name}:')
 
     #create sim_desc for description based product similarity and stores in postgreDB
     if sim_desc_flag == True:
+        from description_helper import create_sim_desc
+        print(f'Started creating similar description mappings')
         create_sim_desc(products, engine)
 
     ## dropping duplicates
@@ -165,6 +170,7 @@ def process_products(engine, sim_desc_flag = False):
 
     products.to_sql(name ='productsXtags', con=engine, index = True, if_exists = 'replace' )
 
+    print(f'Setting up schema for processed and unprocessed user profiles\n')
     #pending check when to replace/append/delete
     temp = ['dummy@dummy'] + [0] * len(product_tags)
     empty_tag_profile = pd.DataFrame([temp], columns=['email'] + product_tags)
@@ -182,8 +188,6 @@ def process_products(engine, sim_desc_flag = False):
     with engine.connect() as con:
         con.execute("""ALTER TABLE "tags_profile_unproc" ADD PRIMARY KEY ("email")""")
 
-    print(f'\nSuccessfully processed products...')
-
     ## pending
     ## add a function to check change in products/tags (check by reading old file)
 
@@ -199,7 +203,7 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
     
     # 1. Based on orders history
     if not temp_user.empty:
-        print('Found existing user...')
+        print('Found existing user,')
 
         #Assume customer likes/Bought this product
         temp_user.loc[product_handle] = 5.0
@@ -283,7 +287,7 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
                         title2handle = 'title2handle', standalone = True, n_recos = 6)[1:]
 
     #print output and verify results
-    print(f'\nPart1: {part1},\nPart2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
+    # print(f'\nPart1: {part1},\nPart2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
     
     # sampling recommendations based on priority based function
     # The five positions for weights represent prob dist of selection from each arr
@@ -295,7 +299,6 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
         # sample results from both collaborative(60%) and rest(40%) from content+demographics+tags(personalized/Non-personalized)+similar_desc
         Model_weights = [10, 2, 3, 3, 5]
         results = weighted_sample_without_replacement( arrs= [ part1, part2, part3, part4, part5 ], weight_each_arr = Model_weights, k=reco_count)
-        print(results)
         return results
         
         
@@ -618,5 +621,5 @@ def get_size(payload):
     
 
 def model_fn(engine):
-    process_products(engine, sim_desc_flag=True)
+    process_products(engine, sim_desc_flag=False)
     pre_process(engine)

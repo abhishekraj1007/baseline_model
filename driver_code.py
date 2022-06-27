@@ -28,13 +28,19 @@ model_fn(engine=engine)
 
 @app.route("/check-user/<email>", methods = ['GET'])
 def get_old_recos(email):
+    """
+    returns old recommendations plus old payload that user filled as form
+    to be used as autofill on frontend
+    """
+
     table_name = 'tags_profile_unproc'
     ## checking if profile exists
     with engine.connect() as con:
-        data = con.execute(f"""select "recos" from "{table_name}" where "email" = '{email}'""").fetchone()
-    
+        recos = con.execute(f"""select "recos" from "{table_name}" where "email" = '{email}'""").fetchone()
+        unproc_data = con.execute(f"""select "unproc_data" from "{table_name}" where "email" = '{email}'""").fetchone()
     #all required fields are being returned already from the past stored results
-    return jsonify(json.loads(data[0])) if data else jsonify({})
+    return jsonify( {'response': json.loads(recos[0]) if recos else dict() ,
+     'form_data': json.loads(unproc_data[0]) if unproc_data else dict() } )
 
 
 @app.route('/test', methods=['GET'])
@@ -73,7 +79,6 @@ def personalize():
     ## passing postgre engine object to get tag based inference using tag array
     tag_plus_style = get_tag_based_inference(tag_profile, 'productsXtags' , engine , title2handle = 'title2handle', ids = ids,
                                                                             standalone = False, n_recos = 12)
-    
 
     #getting all required fields
     results = beautify_recos(tag_plus_style, data, engine)
