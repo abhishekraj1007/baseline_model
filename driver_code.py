@@ -3,7 +3,7 @@ from helper_code import  create_profile, store_user, get_tag_based_inference, st
 from helper_code import model_fn
 
 import os
-import json
+import json, copy
 from flask import Flask, request, jsonify
 app = Flask(__name__)
 
@@ -59,9 +59,12 @@ def recommend():
 
 @app.route('/personalize',methods=['POST'])
 def personalize():
-
     data = request.json
     data = data['finalQuizData']
+
+    #data to be returned as it is in future and avoids the apostrophe error with SQL databases
+    data_to_store = json.loads(json.dumps(copy.deepcopy(data)).replace("'","''"))
+
     email = data['email']['value']
     
     tag_profile = create_profile(data, product_tags_filename='product_tags')
@@ -84,7 +87,7 @@ def personalize():
     beautified_results = beautify_recos(tag_plus_style, data, engine)
 
     #Storing Unprocessed data for future in a different collection
-    store_user_unprocessed(email, data, recos = beautified_results, engine = engine)
+    store_user_unprocessed(email, data = data_to_store, recos = beautified_results, engine = engine)
 
     return jsonify( beautified_results )
 
