@@ -177,7 +177,7 @@ def process_products(engine, sim_desc_flag = False):
     if sim_desc_flag == True:
         from description_helper import create_sim_desc
         print(f'Started creating similar description mappings')
-        # create_sim_desc(products, engine)
+        create_sim_desc(products, engine)
 
     ## dropping duplicates
     products.drop_duplicates(subset='title', keep="first", inplace= True)
@@ -227,16 +227,6 @@ def process_products(engine, sim_desc_flag = False):
 
     ## pending
     ## add a function to check change in products/tags (check by reading old file)
-
-    #creating data for filtering products at runtime quick
-    print('saving prices_and_product_types.csv...')
-    df = pd.read_sql_query('select "handle","product_type","price" from "[products]"',con=engine)
-    new_df = df.groupby(['handle','product_type']).price.min().reset_index()
-    new_df['max_price'] = df.groupby(['handle','product_type']).price.max().values
-    new_df.rename( columns={'handle':'handle', 'product_type':'product_type', 'price':'min_price', 'max_price':'max_price'},inplace=True)
-    new_df.product_type = new_df.product_type.map(type_mappings)
-    new_df.to_csv('prices_and_product_types.csv', index = False)
-
 
     
 def get_inference(email, product_title, engine, reco_count = 10, avg_item_ratings = 'avg_item_ratings', 
@@ -709,7 +699,7 @@ def filter_results(recos, prices, engine):
         if ((product_low >= user_low) and (product_high <= user_high)) or ((product_low < user_low) and (product_high > user_high)):
             # append results
             results.append(product[0])
-            
+
     print('filtered.')
     # return product_handles
     return results
