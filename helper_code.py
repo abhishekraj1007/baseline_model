@@ -177,7 +177,7 @@ def process_products(engine, sim_desc_flag = False):
     if sim_desc_flag == True:
         from description_helper import create_sim_desc
         print(f'Started creating similar description mappings')
-        create_sim_desc(products, engine)
+        # create_sim_desc(products, engine)
 
     ## dropping duplicates
     products.drop_duplicates(subset='title', keep="first", inplace= True)
@@ -667,36 +667,37 @@ def get_size(payload):
       return size
     
 
-def filter_results(recos, prices):
+def filter_results(recos, prices, engine):
     """
     function to filter results based on price range inputs
 
     usage: filter_results(['coco-pink-polka-dot-corset-midi-dress','belle-black-ruffle-tulle-puff-corset-dress'], prices, engine)
     """
     print('Filtering results...')
-
     # create a dict-list of recos with prices
+    table_name = 'products'
+
     data = []
 
-    # using physical file for faster execution
-    df = pd.read_csv('prices_and_product_types.csv')
-
     for product_handle in recos:
-        # 0: product_handle, 1: product type, 2,3:prices(low/high)
-        values = df.loc[df.handle == product_handle].values[0]
 
-        #checking if some new product with unknown type exists
-        if not isinstance(values[1], float): 
-            data.append( (values[0], values[1], values[2], values[3]) )
-        else:
-            data.append( (values[0], 'Dresses', values[2], values[3]) )
+        values = pd.read_sql_query(f"""select "price" from "[{table_name}]" where "handle" = '{product_handle}' """,
+                                con=engine).values.flatten()
+        price = (int(min(values)), int(max(values)) )
 
+        product_type = pd.read_sql_query(f"""select "product_type" from "[{table_name}]" where "handle" = '{product_handle}' """,
+                                                                                            con=engine).iloc[0,0]
+        custom_type = type_mappings.get(product_type, "Dresses")
+        
+        ## 0: product_handle, 1: product type, 2:prices(low/high)
+        data.append( (product_handle, custom_type, price) )
+    
     ## finally filter results based on type of clothe
     results = []
     for product in data:
         #select product's highest and lowest price
-        product_low = product[2]
-        product_high = product[3]
+        product_low = product[2][0]
+        product_high = product[2][1]
         # select product type
         custom_type = product[1]
 
@@ -708,7 +709,8 @@ def filter_results(recos, prices):
         if ((product_low >= user_low) and (product_high <= user_high)) or ((product_low < user_low) and (product_high > user_high)):
             # append results
             results.append(product[0])
-
+            
+    print('filtered.')
     # return product_handles
     return results
 

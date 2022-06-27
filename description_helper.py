@@ -6,9 +6,9 @@ import nltk
 import importlib
 
 try:
-    nltk.data.find('tokenizers/punkt')
+    nltk.data.find('punkt')
 except LookupError:
-    print('\nNLTK punct now found, redownloading...')
+    print('\nNLTK punct not found, redownloading...')
     nltk.download('punkt')
     importlib.reload(nltk)
 
