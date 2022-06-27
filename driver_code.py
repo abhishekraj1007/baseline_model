@@ -99,6 +99,7 @@ def personalize():
 
 if __name__ == '__main__':
     try:
+        print('Entered code: __main__')
         app.run(port= os.environ.get('AWS_PORT', 5000) )
     except KeyboardInterrupt:
         print(f'Server closed.')
