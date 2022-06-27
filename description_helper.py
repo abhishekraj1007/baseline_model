@@ -3,12 +3,20 @@ import requests
 from bs4 import BeautifulSoup as bs
 import time
 import nltk
+import importlib
+
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    print('\nNLTK punct now found, redownloading...')
+    nltk.download('punkt')
+    importlib.reload(nltk)
+
 from nltk.tokenize import word_tokenize
-nltk.download('punkt')
+
 import string
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
-# import pickle
 
 
 model_name = "bert-base-nli-mean-tokens"
