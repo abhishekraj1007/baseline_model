@@ -14,6 +14,42 @@ import json
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
 
+# defining macros
+type_mappings = {
+'Corset Top':'Tops',
+'Shirts & Tops':'Tops',
+'Bralette':'Tops',
+'Blazer':'Tops',
+'Crop Top':'Tops',
+'Jacket':'Tops',
+'Corset':'Tops',
+'Top':'Tops',
+'Sweater':'Tops',
+
+'Dresses':'Dresses',
+'Dress':'Dresses',
+'Gown':'Dresses',
+'Coord Set':'Dresses',
+'Jumpsuit':'Dresses',
+'Jumpsuits & Rompers':'Dresses',
+'Skirt':'Dresses',
+
+'Pants':'Bottoms',
+'Pant':'Bottoms',
+'Shorts':'Bottoms',
+'Skirts':'Bottoms',
+'Jeans':'Bottoms',
+
+'Sweatshirt':'Loungewear',
+'Loungewear':'Loungewear',
+'Cardigan':'Loungewear',
+'Joggers':'Loungewear',
+
+'Detachable Sleeves':'Accessories',
+'Belt':'Accessories',
+'Gift Cards':'Accessories'
+}
+
 def pre_process(engine):
     #Read Orders file
     table_name = 'orders'
@@ -171,6 +207,7 @@ def process_products(engine, sim_desc_flag = False):
     products.to_sql(name ='productsXtags', con=engine, index = True, if_exists = 'replace' )
 
     print(f'Setting up schema for processed and unprocessed user profiles\n')
+    
     #pending check when to replace/append/delete
     temp = ['dummy@dummy'] + [0] * len(product_tags)
     empty_tag_profile = pd.DataFrame([temp], columns=['email'] + product_tags)
@@ -190,6 +227,16 @@ def process_products(engine, sim_desc_flag = False):
 
     ## pending
     ## add a function to check change in products/tags (check by reading old file)
+
+    #creating data for filtering products at runtime quick
+    print('saving prices_and_product_types.csv...')
+    df = pd.read_sql_query('select "handle","product_type","price" from "[products]"',con=engine)
+    new_df = df.groupby(['handle','product_type']).price.min().reset_index()
+    new_df['max_price'] = df.groupby(['handle','product_type']).price.max().values
+    new_df.rename( columns={'handle':'handle', 'product_type':'product_type', 'price':'min_price', 'max_price':'max_price'},inplace=True)
+    new_df.product_type = new_df.product_type.map(type_mappings)
+    new_df.to_csv('prices_and_product_types.csv', index = False)
+
 
     
 def get_inference(email, product_title, engine, reco_count = 10, avg_item_ratings = 'avg_item_ratings', 
@@ -322,11 +369,7 @@ def weighted_sample_without_replacement(arrs, weight_each_arr, k=2):
                 indices.append(i)
     return [population[i] for i in indices]
 
-
-
-###############################################################
-###############################################################
-#API 2
+######################################################################
 
 
 def create_profile(data, product_tags_filename = 'product_tags'):
@@ -495,7 +538,7 @@ def store_user(tag_profile, email, engine):
             insert into "{table_name}"
             values ('{email}', {str(tag_profile.values.tolist())[1:-1]} )
             """)
-        print('New user tag profile added.\nand')
+        print('New user tag profile added.')
 
 
 def get_user(email, engine):
@@ -533,7 +576,7 @@ def get_user(email, engine):
     return user_profile    
 
 
-def beautify_recos(recos, payload, engine):
+def beautify_recos(recos, engine, payload = None, take_size = False):
     """
     returns required fields in dict/json format with the product's handle(S) as input,
     dont forget to input list of products as input.
@@ -542,7 +585,11 @@ def beautify_recos(recos, payload, engine):
     """
     table_name = 'products'
     base_url = 'https://leaclothingco.com/products/'
-    size = get_size(payload)
+
+    if take_size:
+        size = get_size(payload)
+    else:
+        size = ''
 
     res = []
     for product in recos:
@@ -620,6 +667,51 @@ def get_size(payload):
       return size
     
 
+def filter_results(recos, prices):
+    """
+    function to filter results based on price range inputs
+
+    usage: filter_results(['coco-pink-polka-dot-corset-midi-dress','belle-black-ruffle-tulle-puff-corset-dress'], prices, engine)
+    """
+    print('Filtering results...')
+
+    # create a dict-list of recos with prices
+    data = []
+
+    # using physical file for faster execution
+    df = pd.read_csv('prices_and_product_types.csv')
+
+    for product_handle in recos:
+        # 0: product_handle, 1: product type, 2,3:prices(low/high)
+        values = df.loc[df.handle == product_handle].values[0]
+
+        #checking if some new product with unknown type exists
+        if not isinstance(values[1], float): 
+            data.append( (values[0], values[1], values[2], values[3]) )
+        else:
+            data.append( (values[0], 'Dresses', values[2], values[3]) )
+
+    ## finally filter results based on type of clothe
+    results = []
+    for product in data:
+        #select product's highest and lowest price
+        product_low = product[2]
+        product_high = product[3]
+        # select product type
+        custom_type = product[1]
+
+        # find users lowest and highest budget based on dress type
+        user_low = prices[custom_type][0]
+        user_high = prices[custom_type][1]
+
+        # check if product's lower is greater than user's and higher is lower than user's AND if product price range is very large
+        if ((product_low >= user_low) and (product_high <= user_high)) or ((product_low < user_low) and (product_high > user_high)):
+            # append results
+            results.append(product[0])
+
+    # return product_handles
+    return results
+
 def model_fn(engine):
-    process_products(engine, sim_desc_flag=False)
+    process_products(engine, sim_desc_flag=True)
     pre_process(engine)

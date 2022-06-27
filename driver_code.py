@@ -1,6 +1,6 @@
-from helper_code import beautify_recos, get_inference
+from helper_code import beautify_recos, filter_results, get_inference
 from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed, beautify_recos
-from helper_code import model_fn
+from helper_code import model_fn, filter_results
 
 import os
 import json, copy
@@ -54,7 +54,8 @@ def recommend():
     # print(f"Recommendations for the product: { base_url + title2handle[ data['product_title'] ] }")
     results = get_inference(data['email'], data['product_title'], engine, reco_count = 8)
 
-    return jsonify( [{'Handle':item, 'URL':base_url + item} for item in results] )
+    beautified_results = beautify_recos(recos = results, engine=engine)
+    return jsonify( beautified_results )
 
 
 @app.route('/personalize',methods=['POST'])
@@ -81,10 +82,14 @@ def personalize():
     
     ## passing postgre engine object to get tag based inference using tag array
     tag_plus_style = get_tag_based_inference(tag_profile, 'productsXtags' , engine , title2handle = 'title2handle', ids = ids,
-                                                                            standalone = False, n_recos = 12)
+                                                                            standalone = False, n_recos = 15)
+
+    #filtering results based on user given price range
+    price_dict = data["spend categories"]["value"]
+    filtered_recos = filter_results(tag_plus_style, prices = price_dict)
 
     #getting all required fields
-    beautified_results = beautify_recos(tag_plus_style, data, engine)
+    beautified_results = beautify_recos(filtered_recos, engine, payload=data, take_size = True)
 
     #Storing Unprocessed data for future in a different collection
     store_user_unprocessed(email, data = data_to_store, recos = beautified_results, engine = engine)
@@ -94,6 +99,7 @@ def personalize():
 
 if __name__ == '__main__':
     try:
+        print('Entered code: __main__')
         app.run(port= os.environ.get('AWS_PORT', 5000) )
     except KeyboardInterrupt:
         print(f'Server closed.')
