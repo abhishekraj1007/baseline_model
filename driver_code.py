@@ -26,13 +26,13 @@ base_url = 'https://leaclothingco.com/products/'
 #train model for the first time
 model_fn(engine=engine)
 
-@app.route("/check-user/<email>", methods = ['GET'])
-def get_old_recos(email):
+@app.route("/check-user", methods = ['GET'])
+def get_old_recos():
     """
     returns old recommendations plus old payload that user filled as form
     to be used as autofill on frontend
     """
-
+    email = request.args.get("email")
     table_name = 'tags_profile_unproc'
     ## checking if profile exists
     with engine.connect() as con:
@@ -81,12 +81,12 @@ def personalize():
                                                                             standalone = False, n_recos = 12)
 
     #getting all required fields
-    results = beautify_recos(tag_plus_style, data, engine)
+    beautified_results = beautify_recos(tag_plus_style, data, engine)
 
     #Storing Unprocessed data for future in a different collection
-    store_user_unprocessed(email, data, recos = results, engine = engine)
+    store_user_unprocessed(email, data, recos = beautified_results, engine = engine)
 
-    return jsonify( results )
+    return jsonify( beautified_results )
 
 
 if __name__ == '__main__':
