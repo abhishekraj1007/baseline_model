@@ -86,7 +86,7 @@ def personalize():
 
     #filtering results based on user given price range
     price_dict = data["spend categories"]["value"]
-    filtered_recos = filter_results(tag_plus_style, prices = price_dict, engine = engine)
+    filtered_recos = filter_results(tag_plus_style, prices = price_dict)
 
     #getting all required fields
     beautified_results = beautify_recos(filtered_recos, engine, payload=data, take_size = True)

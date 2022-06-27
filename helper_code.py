@@ -32,6 +32,7 @@ type_mappings = {
 'Coord Set':'Dresses',
 'Jumpsuit':'Dresses',
 'Jumpsuits & Rompers':'Dresses',
+'Skirt':'Dresses',
 
 'Pants':'Bottoms',
 'Pant':'Bottoms',
@@ -226,6 +227,16 @@ def process_products(engine, sim_desc_flag = False):
 
     ## pending
     ## add a function to check change in products/tags (check by reading old file)
+
+    #creating data for filtering products at runtime quick
+    print('saving prices_and_product_types.csv...')
+    df = pd.read_sql_query('select "handle","product_type","price" from "[products]"',con=engine)
+    new_df = df.groupby(['handle','product_type']).price.min().reset_index()
+    new_df['max_price'] = df.groupby(['handle','product_type']).price.max().values
+    new_df.rename( columns={'handle':'handle', 'product_type':'product_type', 'price':'min_price', 'max_price':'max_price'},inplace=True)
+    new_df.product_type = new_df.product_type.map(type_mappings)
+    new_df.to_csv('prices_and_product_types.csv', index = False)
+
 
     
 def get_inference(email, product_title, engine, reco_count = 10, avg_item_ratings = 'avg_item_ratings', 
@@ -656,36 +667,36 @@ def get_size(payload):
       return size
     
 
-def filter_results(recos, prices, engine):
+def filter_results(recos, prices):
     """
     function to filter results based on price range inputs
 
     usage: filter_results(['coco-pink-polka-dot-corset-midi-dress','belle-black-ruffle-tulle-puff-corset-dress'], prices, engine)
     """
     print('Filtering results...')
+
     # create a dict-list of recos with prices
-    table_name = 'products'
     data = []
 
+    # using physical file for faster execution
+    df = pd.read_csv('prices_and_product_types.csv')
+
     for product_handle in recos:
+        # 0: product_handle, 1: product type, 2,3:prices(low/high)
+        values = df.loc[df.handle == product_handle].values[0]
 
-        values = pd.read_sql_query(f"""select "price" from "[{table_name}]" where "handle" = '{product_handle}' """,
-                                con=engine).values.flatten()
-        price = (int(min(values)), int(max(values)) )
+        #checking if some new product with unknown type exists
+        if not isinstance(values[1], float): 
+            data.append( (values[0], values[1], values[2], values[3]) )
+        else:
+            data.append( (values[0], 'Dresses', values[2], values[3]) )
 
-        product_type = pd.read_sql_query(f"""select "product_type" from "[{table_name}]" where "handle" = '{product_handle}' """,
-                                                                                            con=engine).iloc[0,0]
-        custom_type = type_mappings.get(product_type, "Dresses") 
-        
-        # 0: product_handle, 1: product type, 2:prices(low/high)
-        data.append( (product_handle, custom_type, price) )
-    
     ## finally filter results based on type of clothe
     results = []
     for product in data:
         #select product's highest and lowest price
-        product_low = product[2][0]
-        product_high = product[2][1]
+        product_low = product[2]
+        product_high = product[3]
         # select product type
         custom_type = product[1]
 
@@ -697,14 +708,10 @@ def filter_results(recos, prices, engine):
         if ((product_low >= user_low) and (product_high <= user_high)) or ((product_low < user_low) and (product_high > user_high)):
             # append results
             results.append(product[0])
-    
-    # to check filtering results
-    # print(data, results,sep='\n')
-    # print(len(data), len(results))
-    print('filtered.')
+
     # return product_handles
     return results
 
 def model_fn(engine):
-    process_products(engine, sim_desc_flag=False)
+    process_products(engine, sim_desc_flag=True)
     pre_process(engine)
