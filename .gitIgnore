@@ -18,3 +18,8 @@ lea_cron_schedule.py
 mumbaiEc2.pem
 mumbai_ppk.ppk
 prices_and_product_types.csv
+orders_export_processed.csv
+order_export_1.csv
+customers_export.csv
+products_export_1.csv
+Procfile
