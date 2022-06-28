@@ -670,7 +670,6 @@ def filter_results(recos, prices, engine):
     data = []
 
     for product_handle in recos:
-
         values = pd.read_sql_query(f"""select "price" from "[{table_name}]" where "handle" = '{product_handle}' """,
                                 con=engine).values.flatten()
         price = (int(min(values)), int(max(values)) )
@@ -696,7 +695,7 @@ def filter_results(recos, prices, engine):
         user_high = prices[custom_type][1]
 
         # check if product's lower is greater than user's and higher is lower than user's AND if product price range is very large
-        if ((product_low >= user_low) and (product_high <= user_high)) or ((product_low < user_low) and (product_high > user_high)):
+        if not ((product_high < user_low) or (product_low > user_high)):
             # append results
             results.append(product[0])
 
