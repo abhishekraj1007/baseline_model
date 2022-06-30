@@ -435,6 +435,7 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
 
     ## get actual tag based similar products
     tag_res = get_tags_sim(tag_profile, tag_array, n = n_recos)
+    
     if not standalone:
         if ids:
             title2handle = pickle.load(open(title2handle, 'rb'))
@@ -448,15 +449,14 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
                 tag_array_temp = tag_array.loc[tag_res]
                 res.extend( get_tags_sim( tag_profile_temp, tag_array_temp ,  n = size_each) )
         else:
-            print('No products selected by the popup part')
-            res = []
+            print('No Styles selected by the user, skipping..')
+            return tag_res
             
         #return mixed results
         return list(set(res))
     else:
         #return tag based recommendations only
         return tag_res
-
 
 
 def get_user_tag_profile(email, indices, engine):
@@ -577,7 +577,10 @@ def beautify_recos(recos, engine, payload = None, take_size = False):
     base_url = 'https://leaclothingco.com/products/'
 
     if take_size:
-        size = get_size(payload)
+        try:
+            size = get_size(payload)
+        except:
+            size = 'NA'
     else:
         size = ''
 
