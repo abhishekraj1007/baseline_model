@@ -1,9 +1,11 @@
-from helper_code import beautify_recos, filter_results, get_inference
+from helper_code import beautify_recos, filter_results, recommend_without_tags, recommend_with_tags
 from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed, beautify_recos
 from helper_code import model_fn, filter_results
 
 import os
+import pandas as pd
 import json, copy
+import pickle
 from flask import Flask, request, jsonify
 app = Flask(__name__)
 
@@ -51,11 +53,29 @@ def get_test():
 @app.route('/recommend',methods=['POST'])
 def recommend():
     data = request.json
-    # print(f"Recommendations for the product: { base_url + title2handle[ data['product_title'] ] }")
-    results = get_inference(data['email'], data['product_title'], engine, reco_count = 8)
+
+    title2handle = pickle.load(open('title2handle', 'rb'))
+    product_handle = title2handle[data['product_title']]
+    email = data['email']
+    results = -1
+
+    user = pd.read_sql_query(f"""select * from "tags_profile" where "email" = '{email}'""",con=engine).set_index('email', drop = True)
+    if not user.empty:
+        user = user.iloc[0]
+        try:
+            results,display_text = recommend_with_tags(user, engine, reco_count=8)
+            print('User tag profile found')
+        except:
+            pass
+    if results == -1:
+        print('User tag profile not found')
+        results = recommend_without_tags(email, product_handle , engine, reco_count = 8)
+        # set display text as normal recommendation engine is used
+        display_text = 'Products based on your browsing history'
+        
 
     beautified_results = beautify_recos(recos = results, engine=engine)
-    return jsonify( beautified_results )
+    return jsonify( {'beautified_results':beautified_results,'display_text':display_text} )
 
 
 @app.route('/personalize',methods=['POST'])
