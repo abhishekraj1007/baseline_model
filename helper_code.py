@@ -50,6 +50,67 @@ type_mappings = {
 'Gift Cards':'Accessories'
 }
 
+
+#{ (tag, abstract_value) : (message_to_be_displayed, [tags_to_be_used_for_recommendations], [actual_weightages]) }
+tags_to_question = {
+('hourglass','pos'):('Because you described your body as \n"Hourglass"',['hourglass'],[1]),
+('pear','pos'):('Because you described your body as \n"pear"',['pear'],[1]),
+('rectangle','pos'):('Because you described your body as \n"Rectangle"',['rectangle'],[1]),
+('apple','pos'): ('Because you described your body as \n"Apple"',['apple'],[1]),
+('invertedtriangle','pos'): ('Because you described your body as \n"Inverted Triangle"',['invertedtriangle'],[1]),
+
+('sleeveless','pos'):('Because you like to highlight your \n"Arms"',['sleeveless'],[1]),
+('corset','pos'):('Because you like to highlight your \n"Waist"',['corset','bodycon','croptop'],[1,1,1]),
+('bodycon','pos'):('Because you like to highlight your \n"Waist"',['corset','bodycon','croptop'],[1,1,1]),
+('croptop','pos'):('Because you like to highlight your \n"Waist"',['corset','bodycon','croptop'],[1,1,1]),
+('mini','pos'):('Because you like to highlight your \n"Legs"',['mini'],[1]),
+('backless','pos'):('Because you like to highlight your \n"Back"',['backless'],[1]),
+('offshoulder','pos'):('Because you like to highlight your \n"Collarbones"',['offshoulder','strapless'],[1,1]),
+('strapless','pos'):('Because you like to highlight your \n"Collarbones"',['offshoulder','strapless'],[1,1]),
+
+('sleeves','pos'):('Because you uncomfortable showing \n"Arms"',['sleeves'],1),
+('bodycon','neg'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('croptop','neg'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('highwaist','pos'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('skater','pos'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('shift','pos'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('slip','pos'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('midi','pos'):('Because you uncomfortable showing \n"Legs"',['midi','gown','pants','maxi'],[1,1,1,1]),
+('gown','post'):('Because you uncomfortable showing \n"Legs"',['midi','gown','pants','maxi'],[1,1,1,1]),
+('pants','post'):('Because you uncomfortable showing \n"Legs"',['midi','gown','pants','maxi'],[1,1,1,1]),
+('maxi','post'):('Because you uncomfortable showing \n"Legs"',['midi','gown','pants','maxi'],[1,1,1,1]),
+('backless','neg'):('Because you uncomfortable showing \n"Back"',['backless'],[-1]),
+('strapless','neg'):('Because you uncomfortable showing \n"Collarbones"',['offshoulder','strapless'],[-1,-1]),
+('offshoulder','neg'):('Because you uncomfortable showing \n"Collarbones"',['offshoulder','strapless'],[-1,-1]),
+
+('petite','pos'):("Because you're Petite in height",['petite'],[1]),
+('average','pos'):("Because you're Average in height",['average'],[1]),
+('tall','pos'):("Because you're Tall in height",['tall'],[1]),
+
+('pastel','pos'):("Because you like 'Pastels'",['pastel'],[1]),
+('neutral','pos'):("Because you like 'Neutrals'",['neutral'],[1]),
+('brighthues','pos'):("Because you like 'Bright Hues'",['brighthues'],[1]),
+('earthytones','pos'):("Because you like 'Earthy Tones'",['earthytones'],[1]),
+('neon','pos'):("Because you like 'Neons'",['neon'],[1]),
+
+('floral','pos'): ("As you're fan of 'Prints'",['floral'],[1]),
+('resort','pos'): ("As you're fan of 'Prints'",['resort'],[1]),
+('abstract','pos'): ("As you're fan of 'Prints'",['abstract'],[1]),
+('graphic','pos'): ("As you're fan of 'Prints'",['graphic'],[1]),
+('geometric','pos'): ("As you're fan of 'Prints'",['geometric'],[1]),
+('stripes','pos'): ("As you're fan of 'Prints'",['stripes'],[1]),
+('checkered','pos'): ("As you're fan of 'Prints'",['checkered'],[1]),
+
+('birthday','pos'): ("As you're shopping for 'birthday'",['birthday'],[1]),
+('graduation','pos'): ("As you're shopping for 'graduation'",['graduation'],[1]),
+('bridalshower','pos'): ("As you're shopping for 'Bridal Shower'",['bridalshower'],[1]),
+('bachelorette','pos'): ("As you're shopping for 'Bachelorette'",['bachelorette'],[1]),
+('datenight','pos'): ("As you're shopping for 'Date Night'",['datenight'],[1]),
+('party','pos'): ("As you're shopping for 'Party'",['party'],[1]),
+('concert','pos'): ("As you're shopping for 'Concert'",['concert'],[1]),
+('beachvacation','pos'): ("As you're shopping for 'Beach Vacation'",['beachvacation'],[1])
+}
+
 def pre_process(engine):
     #Read Orders file
     table_name = 'orders'
@@ -158,7 +219,6 @@ def pre_process(engine):
     print('Training Corr matrix finished,\nSaving weights.\n')
 
 
-
 def process_products(engine, sim_desc_flag = False):
     """
     Function to initialize things and will be used for retraining, other purpose it serves:
@@ -228,13 +288,41 @@ def process_products(engine, sim_desc_flag = False):
     ## pending
     ## add a function to check change in products/tags (check by reading old file)
 
-    
-def get_inference(email, product_title, engine, reco_count = 10, avg_item_ratings = 'avg_item_ratings', 
-                        title2handle = 'title2handle', tag_array = 'productsXtags', similarity_matrix='sim'):
-    
-    title2handle = pickle.load(open(title2handle, 'rb'))
-    product_handle = title2handle[product_title]
 
+def recommend_with_tags(user, engine, reco_count):
+    """
+    recommend based on random selected tags filled by the user for the recommend part on product page
+    """
+    # select filled user tags from db
+    non_zero_attr = user.loc[user!=0]
+    if not non_zero_attr.empty:
+        random_tag = random.choice(non_zero_attr.index.to_list())
+    #return empty if no tag found in user profile
+    else:
+        print('User tag profile found but no preferences filled by user,')
+        raise Exception
+    
+    #create key to be accessed from custom tags_to_question mappings
+    key = (random_tag,'pos' if non_zero_attr[random_tag] > 0 else 'neg')
+    # to be displayed on backend
+    display_text = tags_to_question[key][0]
+    #selecting 2nd and third position for tags and their weights for profile creation for custom recommendation part
+    tags = dict(zip(tags_to_question[key][1], tags_to_question[key][2]))
+
+    #get inference
+    tag_profile = pd.Series(tags, index = user.index)
+    tag_profile.fillna(0, inplace= True)
+    result = get_tag_based_inference(tag_profile, 'productsXtags', engine, standalone = True, n_recos = reco_count)
+    return result, display_text
+
+
+def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_item_ratings = 'avg_item_ratings', 
+                         tag_array = 'productsXtags', similarity_matrix='sim'):
+    """
+    will be used when user tags are not found in the db
+    else recommend_with_tags will be used
+    """
+    
     temp_user = get_user(email, engine)
     sim = pd.read_sql_query(f'select * from {similarity_matrix}',con=engine).set_index('index', drop=True)
     
@@ -283,8 +371,10 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
                 part2 = data.iloc[0,0].split(',')[:5]
                 print(f'Demographics results included for user from state: {province}')
             else:
+                # print('Demographics data not found')
                 part2 = []
         else:
+            # print('Demographics data not found')
             part2 = []
     except Exception as e:
         print(f'Exception at Demographics part: {e}')
@@ -310,18 +400,8 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
 
     # 5. get_tag_based_personalized recommendations else show similar tag based products
     tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('handle', drop = True)
-    #fetching user attributes from mongodb
-    tag_profile = get_user_tag_profile(email, tag_array.columns, engine)
-
-    if not tag_profile.empty:
-        print(f'Found tag profile: {email}')
-        part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine ,
-                            title2handle = 'title2handle', standalone = True, n_recos = 5)
-    else:
-        print(f'User tag profile not found')
-        tag_profile = tag_array.loc[tag_array.index == product_handle ].iloc[-1,:]
-        part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine ,
-                        title2handle = 'title2handle', standalone = True, n_recos = 6)[1:]
+    tag_profile = tag_array.loc[tag_array.index == product_handle ].iloc[-1,:]
+    part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine , standalone = True, n_recos = 6)[1:]
 
     #print output and verify results
     # print(f'\nPart1: {part1},\nPart2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
@@ -334,7 +414,7 @@ def get_inference(email, product_title, engine, reco_count = 10, avg_item_rating
         return results
     else:
         # sample results from both collaborative(60%) and rest(40%) from content+demographics+tags(personalized/Non-personalized)+similar_desc
-        Model_weights = [10, 2, 3, 3, 5]
+        Model_weights = [10, 2, 2, 2, 4]
         results = weighted_sample_without_replacement( arrs= [ part1, part2, part3, part4, part5 ], weight_each_arr = Model_weights, k=reco_count)
         return results
         
@@ -369,7 +449,8 @@ def create_profile(data, product_tags_filename = 'product_tags'):
     product_tags = pickle.load(open(product_tags_filename, 'rb'))
     
     # a slightly smaller weight is assigned to filter tags
-    uncomfortable_dict = {'Arms':{'Sleeves':1}, 'Waist':{'High Waist':1, 'Skater':1, 'Shift':1, 'Slip':1, "Bodycon":-2, "Crop Top":-2},
+    uncomfortable_dict = {'Arms':{'Sleeves':1}, 
+                        'Waist':{'High Waist':1, 'Skater':1, 'Shift':1, 'Slip':1, "Bodycon":-2, "Crop Top":-2},
                          'Legs': {'Midi':1, 'Gown':1, 'Pants':1, 'Maxi':1, 'Gown':1},
                          'Back':{'Backless':-2},
                          'Collarbones':{"Off-Shoulder":-2, "Strapless":-2}}
