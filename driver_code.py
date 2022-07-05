@@ -1,4 +1,4 @@
-from helper_code import beautify_recos, filter_results, recommend_without_tags, recommend_with_tags
+from helper_code import beautify_recos, filter_results, recommend_without_tags, recommend_with_tags, get_similar_cart_items
 from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed, beautify_recos
 from helper_code import model_fn, filter_results
 
@@ -49,6 +49,21 @@ def get_old_recos():
 def get_test():
     return "Success....."
 
+
+@app.route('/cart',methods=['POST'])
+def cart():
+    """
+    To recommend similar products in the cart
+    """
+    data = request.json
+
+    title2handle = pickle.load(open('title2handle', 'rb'))
+    product_handle = title2handle[data['product_title']]
+    email = data['email']
+    
+    results = get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim')
+    beautified_results = beautify_recos(recos = results, engine=engine)
+    return jsonify(beautified_results)
 
 @app.route('/recommend',methods=['POST'])
 def recommend():

@@ -439,6 +439,44 @@ def weighted_sample_without_replacement(arrs, weight_each_arr, k=2):
                 indices.append(i)
     return [population[i] for i in indices]
 
+
+def get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim'):
+    temp_user = get_user(email, engine)
+    sim = pd.read_sql_query(f'select * from {similarity_matrix}',con=engine).set_index('index', drop=True)
+    
+    # orders history
+    if not temp_user.empty:
+        #Assume customer likes/Bought this product
+        temp_user.loc[product_handle] = 5.0
+        
+        #Normalizing the rating scale by subtracting average ratings by users
+        avg_item_ratings = pickle.load( open('avg_item_ratings','rb'))
+        r_u_j = temp_user.values - avg_item_ratings.values
+
+        ##Getting inference using:
+        ## Score(u,i) = sum(sim(i,j)*(r(u,j) - r_avg(j)))/sum(sim(i,j)) + r_avg(i)
+        ## Where summation is for all users i.e. from j to I.
+        
+        res = []
+        for item in temp_user.index.values:
+            #Skip items which are already bought or the item i.e. currently viewed
+            if temp_user.loc[item]>=5 or item == product_handle:
+                continue
+            sim_i = sim.loc[:,item].values
+            num = np.matmul(sim_i, r_u_j)
+            den = sim.loc[:,item].sum()
+            score = (num/den) + avg_item_ratings[item]
+            res.append([item,score])
+        
+        res.sort(key = lambda x: x[1], reverse = True)
+        res = [product for (product,score) in res[:5]]
+    else:
+        print('Customer order history not found, using content based...')
+        # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
+        res = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
+    
+    return res
+
 ######################################################################
 
 
@@ -790,3 +828,4 @@ def filter_results(recos, prices, engine):
 def model_fn(engine):
     process_products(engine, sim_desc_flag=False)
     pre_process(engine)
+    pass
