@@ -21,3 +21,19 @@ from orders a
 join order_lines b on a.id = b.order_id
 order by a.created_at;
 
+
+CREATE OR REPLACE VIEW "[ga_events]"
+ AS
+SELECT latest_ga_ga_events.__hevo_report_date,
+    latest_ga_ga_events.pagepath,
+    latest_ga_ga_events.pageviews,
+    latest_ga_ga_events.uniquepageviews,
+    latest_ga_ga_events.productaddstocart,
+    latest_ga_ga_events.productcheckouts,
+    latest_ga_ga_events.productdetailviews
+   FROM latest_ga_ga_events
+  WHERE latest_ga_ga_events.pagepath::text ~~ '/products/%'::text AND latest_ga_ga_events.__hevo_report_date > (CURRENT_DATE - '3 days'::interval);
+  
+  ALTER TABLE "[ga_events]"
+    OWNER TO lea_clothing;
+  
