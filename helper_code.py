@@ -148,7 +148,7 @@ def pre_process(engine):
     
     #preparing ga_top_selling events (dumps a pickle file)
     print('Processing Google analytics top selling products')
-    ga_top_selling(engine, n_recos=5)
+    ga_top_selling(engine)
     
     #saving hardcoded sim_demo for faster demographic inference
     sim_demo.to_sql('sim_demo', engine, index = True, if_exists = 'replace' )
@@ -434,17 +434,23 @@ def ga_process_prod_name(prod_name):
     return prod_name_processed
 
 
-def ga_top_selling(engine, n_recos=5):
-    table_name = 'googleanalyticproduct'
-    google_analytic_prod = pd.read_sql_query(f'select * from "{table_name}"',con=engine)
+def ga_top_selling(engine):
+    table_name = 'ga_events'
+    google_analytic_prod = pd.read_sql_query(f'select * from "[{table_name}]"',con=engine)
     df = google_analytic_prod[['pagepath','productdetailviews','productaddstocart','productcheckouts']].copy()
     df['pagepath'] = df.apply(lambda x: ga_process_prod_name(x.pagepath), axis=1)
+
+    # filtering products which are expired or wrong names/coflicts
+    title2handle = pickle.load(open('title2handle', 'rb'))
+    df = df[df.pagepath.isin(title2handle.values())]
+
     df['score'] = df['productdetailviews']+df['productaddstocart']
     df = df.groupby('pagepath')['score'].sum('score').reset_index()
     df['score']=(df['score']-df['score'].min())/(df['score'].max()-df['score'].min())
     df.set_index('pagepath', inplace=True)
-    res = df.sort_values(by='score', ascending=False).index.to_list()[:n_recos]
+    res = df.sort_values(by='score', ascending=False).index.to_list()
     pickle.dump(res, open('ga_top_selling','wb'))
+    print('Succesfully saved ga_top_Selling.')
 
         
 def weighted_sample_without_replacement(arrs, weight_each_arr, k=2):
