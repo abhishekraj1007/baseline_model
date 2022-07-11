@@ -147,8 +147,8 @@ def pre_process(engine):
                 sim_demo.loc[state,product] = ','.join(sim_products)
     
     #preparing ga_top_selling events (dumps a pickle file)
-    print('Processing Google analytics top selling products')
-    ga_top_selling(engine)
+    # print('Processing Google analytics top selling products')
+    # ga_top_selling(engine)
     
     #saving hardcoded sim_demo for faster demographic inference
     sim_demo.to_sql('sim_demo', engine, index = True, if_exists = 'replace' )
@@ -438,6 +438,7 @@ def ga_top_selling(engine):
     table_name = 'ga_events'
     google_analytic_prod = pd.read_sql_query(f'select * from "[{table_name}]"',con=engine)
     df = google_analytic_prod[['pagepath','productdetailviews','productaddstocart','productcheckouts']].copy()
+    print(df.shape)
     df['pagepath'] = df.apply(lambda x: ga_process_prod_name(x.pagepath), axis=1)
 
     # filtering products which are expired or wrong names/coflicts
