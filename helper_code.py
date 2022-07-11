@@ -146,6 +146,10 @@ def pre_process(engine):
             if sim_products:
                 sim_demo.loc[state,product] = ','.join(sim_products)
     
+    #preparing ga_top_selling events (dumps a pickle file)
+    print('Processing Google analytics top selling products')
+    ga_top_selling(engine)
+    
     #saving hardcoded sim_demo for faster demographic inference
     sim_demo.to_sql('sim_demo', engine, index = True, if_exists = 'replace' )
 
@@ -326,7 +330,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
     temp_user = get_user(email, engine)
     sim = pd.read_sql_query(f'select * from {similarity_matrix}',con=engine).set_index('index', drop=True)
     
-    # 1. Based on orders history
+    # 1. Based on orders history (Collaborative filtering)
     if not temp_user.empty:
         print('Found existing user,')
 
@@ -359,8 +363,12 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
         print('Customer order history not found, Skipping CF results')
 
 
+    # 2. else show content based recos
+    # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
+    part2 = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
+
     # Demographics Based
-    # 2. Explore customers data and show frequently bought products in the customer's province
+    # 3. Explore customers data and show frequently bought products in the customer's province
     try:
         customer_table = 'customers'
         province = pd.read_sql_query(f"""select "province" from "[{customer_table}]" where "email" = '{email}' """,con=engine)
@@ -368,22 +376,17 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
             province = province.iloc[0,0]
             data = pd.read_sql_query(f"""select "{product_handle}" from sim_demo where "index" = '{province}' """, con=engine)
             if not data.empty:
-                part2 = data.iloc[0,0].split(',')[:5]
+                part3 = data.iloc[0,0].split(',')[:5]
                 print(f'Demographics results included for user from state: {province}')
             else:
                 # print('Demographics data not found')
-                part2 = []
+                part3 = []
         else:
             # print('Demographics data not found')
-            part2 = []
+            part3 = []
     except Exception as e:
         print(f'Exception at Demographics part: {e}')
-        part2 = []
-    
-
-    # 3. show content based recos
-    # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
-    part3 = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
+        part3 = []
     
     
     # 4. get_similar descriptions based products
@@ -398,26 +401,57 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
         part4 = []
 
 
-    # 5. get_tag_based_personalized recommendations else show similar tag based products
+    # 5. show similar tag based products
     tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('handle', drop = True)
     tag_profile = tag_array.loc[tag_array.index == product_handle ].iloc[-1,:]
     part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine , standalone = True, n_recos = 6)[1:]
 
+    # 6. Top selling products info from Google Analytics
+    part6 = pickle.load(open(f'ga_top_selling','rb'))[:5]
+
     #print output and verify results
-    # print(f'\nPart1: {part1},\nPart2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5}\n')
+    # print(f'\nPart1: {part1},\nPart2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5},\n Part6:{part6}')
     
     # sampling recommendations based on priority based function
     # The five positions for weights represent prob dist of selection from each arr
     if temp_user.empty:
-        Model_weights = [1, 1.5, 1, 1]
-        results = weighted_sample_without_replacement( arrs= [ part2, part3, part4, part5 ], weight_each_arr = Model_weights, k=reco_count)
+        Model_weights = [1.5, 1, 1, 1, 1]
+        results = weighted_sample_without_replacement( arrs= [ part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
         return results
     else:
         # sample results from both collaborative(60%) and rest(40%) from content+demographics+tags(personalized/Non-personalized)+similar_desc
-        Model_weights = [10, 2, 2, 2, 4]
-        results = weighted_sample_without_replacement( arrs= [ part1, part2, part3, part4, part5 ], weight_each_arr = Model_weights, k=reco_count)
+        Model_weights = [10, 2, 2, 2, 4, 1]
+        results = weighted_sample_without_replacement( arrs= [ part1, part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
         return results
         
+
+def ga_process_prod_name(prod_name):
+    prod_name_unprocess = prod_name.split('/')[2]
+    if '?' in prod_name_unprocess:
+        prod_name_processed = prod_name_unprocess.split('?')[0]
+    else:
+        prod_name_processed = prod_name_unprocess
+    return prod_name_processed
+
+
+def ga_top_selling(engine):
+    table_name = 'ga_events'
+    google_analytic_prod = pd.read_sql_query(f'select * from "[{table_name}]"',con=engine)
+    df = google_analytic_prod[['pagepath','productdetailviews','productaddstocart','productcheckouts']].copy()
+    df['pagepath'] = df.apply(lambda x: ga_process_prod_name(x.pagepath), axis=1)
+
+    # filtering products which are expired or wrong names/coflicts
+    title2handle = pickle.load(open('title2handle', 'rb'))
+    df = df[df.pagepath.isin(title2handle.values())]
+
+    df['score'] = df['productdetailviews']+df['productaddstocart']
+    df = df.groupby('pagepath')['score'].sum('score').reset_index()
+    df['score']=(df['score']-df['score'].min())/(df['score'].max()-df['score'].min())
+    df.set_index('pagepath', inplace=True)
+    res = df.sort_values(by='score', ascending=False).index.to_list()
+    pickle.dump(res, open('ga_top_selling','wb'))
+    print('Succesfully saved ga_top_Selling.')
+
         
 def weighted_sample_without_replacement(arrs, weight_each_arr, k=2):
     population = []
@@ -441,6 +475,9 @@ def weighted_sample_without_replacement(arrs, weight_each_arr, k=2):
 
 
 def get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim'):
+    """"
+    Recommendation APi for cart items
+    """
     temp_user = get_user(email, engine)
     sim = pd.read_sql_query(f'select * from {similarity_matrix}',con=engine).set_index('index', drop=True)
     
@@ -471,7 +508,7 @@ def get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim
         res.sort(key = lambda x: x[1], reverse = True)
         res = [product for (product,score) in res[:5]]
     else:
-        print('Customer order history not found, using content based...')
+        print('order history not found, using content based filtering for CART...')
         # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
         res = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
     
@@ -825,7 +862,7 @@ def filter_results(recos, prices, engine):
     # return product_handles
     return results
 
-def model_fn(engine):
-    process_products(engine, sim_desc_flag=False)
-    pre_process(engine)
-    pass
+def model_fn(engine, testing = False):
+    if not testing:
+        process_products(engine, sim_desc_flag=False)
+        pre_process(engine)
