@@ -22,7 +22,7 @@ hostname = 'lea-clothing-db.curvyi9vuuc9.ap-south-1.rds.amazonaws.com'
 postgre_port = '5432'
 db_name = 'lea_clothing_db'
 # opening connection to postgre
-engine = create_engine(f'postgresql://{username}:{password}@{hostname}:{postgre_port}/{db_name}')
+engine = create_engine(f'postgresql://{username}:{password}@{hostname}:{postgre_port}/{db_name}', pool_size=100, max_overflow=-1)
 base_url = 'https://leaclothingco.com/products/'
 
 #train model for the first time
