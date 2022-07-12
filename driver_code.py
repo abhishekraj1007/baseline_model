@@ -22,7 +22,9 @@ hostname = 'lea-clothing-db.curvyi9vuuc9.ap-south-1.rds.amazonaws.com'
 postgre_port = '5432'
 db_name = 'lea_clothing_db'
 # opening connection to postgre
+
 engine = create_engine(f'postgresql://{username}:{password}@{hostname}:{postgre_port}/{db_name}', pool_size=100, max_overflow=-1)
+
 base_url = 'https://leaclothingco.com/products/'
 
 #train model for the first time
@@ -64,13 +66,14 @@ def cart():
     results = get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim')
     beautified_results = beautify_recos(recos = results, engine=engine)
     return jsonify(beautified_results)
+    
 
 @app.route('/recommend',methods=['POST'])
 def recommend():
     data = request.json
 
     title2handle = pickle.load(open('title2handle', 'rb'))
-    product_handle = title2handle[data['product_title']]
+    product_handle = title2handle[data['product_title']] 
     email = data['email']
     results = -1
 
@@ -130,6 +133,9 @@ def personalize():
     store_user_unprocessed(email, data = data_to_store, recos = beautified_results, engine = engine)
 
     return jsonify( beautified_results )
+
+
+
     
 
 if __name__ == '__main__':
