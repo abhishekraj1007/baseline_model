@@ -103,7 +103,7 @@ def recommend():
         user = pd.read_sql_query(f"""select * from "tags_profile" where "email" = '{email}'""",con=engine).set_index('email', drop = True)
         if not user.empty:
             user = user.iloc[0]
-            results,display_text = recommend_with_tags(user, engine, reco_count=8)      
+            results,display_text = recommend_with_tags(user, engine, reco_count=8)  
         if results == -1:
             print('User tag profile not found')
             results = recommend_without_tags(email, product_handle , engine, reco_count = 8)

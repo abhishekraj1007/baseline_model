@@ -863,7 +863,7 @@ def filter_results(recos, prices, engine):
     # return product_handles
     return results
 
-def model_fn(engine, testing = False):
+def model_fn(engine, testing = True):
     if not testing:
         process_products(engine, sim_desc_flag=False)
         pre_process(engine)
