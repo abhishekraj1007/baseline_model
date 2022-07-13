@@ -3,7 +3,7 @@ import requests
 import time
 
 NUM_REQUESTS = 500
-SLEEP_COUNT = 0.1
+SLEEP_COUNT = 0.01
 REST_API_URL = "http://localhost:5000/recommend?email=chandan.roy@algoscale.com&product_title=Carla Mauve Silk Corset Top"
 def call_predict_endpoint(n):
 	# load the input image and construct the payload for the request
