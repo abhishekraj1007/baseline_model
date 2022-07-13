@@ -30,112 +30,147 @@ base_url = 'https://leaclothingco.com/products/'
 #train model for the first time
 model_fn(engine=engine)
 
+@app.route('/test', methods=['GET'])
+def get_test():
+    return "Success....."
+
+
 @app.route("/check-user", methods = ['GET'])
 def get_old_recos():
     """
     returns old recommendations plus old payload that user filled as form
     to be used as autofill on frontend
     """
-    email = request.args.get("email")
-    table_name = 'tags_profile_unproc'
-    ## checking if profile exists
-    with engine.connect() as con:
-        recos = con.execute(f"""select "recos" from "{table_name}" where "email" = '{email}'""").fetchone()
-        unproc_data = con.execute(f"""select "unproc_data" from "{table_name}" where "email" = '{email}'""").fetchone()
-    #all required fields are being returned already from the past stored results
-    return jsonify( {'response': json.loads(recos[0]) if recos else dict() ,
-     'form_data': json.loads(unproc_data[0]) if unproc_data else dict() } )
+    try:
+        email = request.args["email"]
+        table_name = 'tags_profile_unproc'
+        ## checking if profile exists
+        with engine.connect() as con:
+            recos = con.execute(f"""select "recos" from "{table_name}" where "email" = '{email}'""").fetchone()
+            unproc_data = con.execute(f"""select "unproc_data" from "{table_name}" where "email" = '{email}'""").fetchone()
+        #all required fields are being returned already from the past stored results
+        return jsonify({
+                            "status" : 200,
+                            "message" : 'Success',
+                            "response" : {'recos': json.loads(recos[0]) if recos else dict() ,
+        'form_data': json.loads(unproc_data[0]) if unproc_data else dict()}   
+                        })
+    except Exception as e:
+        return jsonify({
+                        "status" : 500,
+                        "message" : repr(e),
+                        "response" : None
+                        })
+    
 
 
-@app.route('/test', methods=['GET'])
-def get_test():
-    return "Success....."
-
-
-@app.route('/cart',methods=['POST'])
+@app.route('/cart',methods=['GET'])
 def cart():
     """
     To recommend similar products in the cart
     """
-    data = request.json
-
-    title2handle = pickle.load(open('title2handle', 'rb'))
-    product_handle = title2handle[data['product_title']]
-    email = data['email']
-    
-    results = get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim')
-    beautified_results = beautify_recos(recos = results, engine=engine)
-    return jsonify(beautified_results)
-    
-
-@app.route('/recommend',methods=['POST'])
-def recommend():
-    data = request.json
-
-    title2handle = pickle.load(open('title2handle', 'rb'))
-    product_handle = title2handle[data['product_title']] 
-    email = data['email']
-    results = -1
-
-    user = pd.read_sql_query(f"""select * from "tags_profile" where "email" = '{email}'""",con=engine).set_index('email', drop = True)
-    if not user.empty:
-        user = user.iloc[0]
-        try:
-            results,display_text = recommend_with_tags(user, engine, reco_count=8)
-            print('User tag profile found')
-        except:
-            pass
-    if results == -1:
-        print('User tag profile not found')
-        results = recommend_without_tags(email, product_handle , engine, reco_count = 8)
-        # set display text as normal recommendation engine is used
-        display_text = 'Products based on your browsing history'
+    try:
+        email = request.args.get("email",' ')
+        product_title = request.args['product_title']
         
+        title2handle = pickle.load(open('title2handle', 'rb'))
+        product_handle = title2handle[product_title]
+        
+        results = get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim')
+        beautified_results = beautify_recos(recos = results, engine=engine)
+        return jsonify( {
+                        "status" : 200,
+                        "message" : 'Success',
+                        "response" : beautified_results } )
+    except Exception as e:
+        return jsonify( {
+                        "status" : 500,
+                        "message" : repr(e),
+                        "response" : None} )
 
-    beautified_results = beautify_recos(recos = results, engine=engine)
-    return jsonify( {'beautified_results':beautified_results,'display_text':display_text} )
+
+@app.route('/recommend',methods=['GET'])
+def recommend():
+    try:
+        email = request.args.get("email",' ')
+        product_title = request.args['product_title']
+        title2handle = pickle.load(open('title2handle', 'rb'))
+        product_handle = title2handle[product_title]
+
+        #initialize results as -1 to avoid adding slow exception checking
+        results = -1
+
+        user = pd.read_sql_query(f"""select * from "tags_profile" where "email" = '{email}'""",con=engine).set_index('email', drop = True)
+        if not user.empty:
+            user = user.iloc[0]
+            results,display_text = recommend_with_tags(user, engine, reco_count=8)      
+        if results == -1:
+            print('User tag profile not found')
+            results = recommend_without_tags(email, product_handle , engine, reco_count = 8)
+            # set display text as normal recommendation engine is used
+            display_text = 'Products based on your browsing history'
+        else:
+            print('User tag profile found')
+            
+        beautified_results = beautify_recos(recos = results, engine=engine)
+        return jsonify( {
+                        "status" : 200,
+                        "message" : 'Success',
+                        "response" : {'beautified_results':beautified_results,'display_text':display_text} } )
+    
+    except Exception as e:
+        return jsonify( {
+                        "status" : 500,
+                        "message" : repr(e),
+                        "response" : None } )
 
 
 @app.route('/personalize',methods=['POST'])
 def personalize():
-    data = request.json
-    data = data['finalQuizData']
+    try:
+        data = request.json
+        data = data['finalQuizData']
 
-    #data to be returned as it is in future and avoids the apostrophe error with SQL databases
-    data_to_store = json.loads(json.dumps(copy.deepcopy(data)).replace("'","''"))
+        #data to be returned as it is in future and avoids the apostrophe error with SQL databases
+        data_to_store = json.loads(json.dumps(copy.deepcopy(data)).replace("'","''"))
 
-    email = data['email']['value']
-    
-    tag_profile = create_profile(data, product_tags_filename='product_tags')
-    
-    #Storing processed user profile
-    store_user(tag_profile, email, engine)
+        email = data['email']['value']
+        
+        tag_profile = create_profile(data, product_tags_filename='product_tags')
+        
+        #Storing processed user profile
+        store_user(tag_profile, email, engine)
 
-    #if ids, StandAlone = False (also check inside function)
-    #Getting Ids
-    if data.get('styles', []):
-        ids = data['styles']['value']
-    else:
-        ids = []
-    
-    ## passing postgre engine object to get tag based inference using tag array
-    tag_plus_style = get_tag_based_inference(tag_profile, 'productsXtags' , engine , title2handle = 'title2handle', ids = ids,
-                                                                            standalone = False, n_recos = 15)
+        #if ids, StandAlone = False (also check inside function)
+        #Getting Ids
+        if data.get('styles', []):
+            ids = data['styles']['value']
+        else:
+            ids = []
+        
+        ## passing postgre engine object to get tag based inference using tag array
+        tag_plus_style = get_tag_based_inference(tag_profile, 'productsXtags' , engine , title2handle = 'title2handle', ids = ids,
+                                                                                standalone = False, n_recos = 15)
 
-    #filtering results based on user given price range
-    price_dict = data["spend categories"]["value"]
-    filtered_recos = filter_results(tag_plus_style, prices = price_dict,engine = engine)
+        #filtering results based on user given price range
+        price_dict = data["spend categories"]["value"]
+        filtered_recos = filter_results(tag_plus_style, prices = price_dict,engine = engine)
 
-    #getting all required fields
-    beautified_results = beautify_recos(filtered_recos, engine, payload=data, take_size = True)
+        #getting all required fields
+        beautified_results = beautify_recos(filtered_recos, engine, payload=data, take_size = True)
 
-    #Storing Unprocessed data for future in a different collection
-    store_user_unprocessed(email, data = data_to_store, recos = beautified_results, engine = engine)
+        #Storing Unprocessed data for future in a different collection
+        store_user_unprocessed(email, data = data_to_store, recos = beautified_results, engine = engine)
 
-    return jsonify( beautified_results )
-
-
-
+        return jsonify( {
+                        "status" : 200,
+                        "message" : 'Success',
+                        "response" : beautified_results } )
+    except Exception as e:
+        return jsonify( {
+                        "status" : 500,
+                        "message" : repr(e),
+                        "response" : None} )
     
 
 if __name__ == '__main__':
