@@ -304,7 +304,7 @@ def recommend_with_tags(user, engine, reco_count):
     #return empty if no tag found in user profile
     else:
         print('User tag profile found but no preferences filled by user,')
-        raise Exception
+        return -1, ''
     
     #create key to be accessed from custom tags_to_question mappings
     key = (random_tag,'pos' if non_zero_attr[random_tag] > 0 else 'neg')
@@ -509,7 +509,7 @@ def get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim
         res.sort(key = lambda x: x[1], reverse = True)
         res = [product for (product,score) in res[:5]]
     else:
-        print('order history not found, using content based filtering for CART...')
+        print('order history not found, using content based(sim) filtering for CART...')
         # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
         res = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
     
