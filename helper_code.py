@@ -720,7 +720,7 @@ def get_user(email, engine):
     user_profile[orders.lineitemname.values] = orders.rating.values
     
     # print(user_profile[user_profile!=0])
-    return user_profile    
+    return user_profile
 
 
 def beautify_recos(recos, engine, payload = None, take_size = False):
@@ -742,16 +742,17 @@ def beautify_recos(recos, engine, payload = None, take_size = False):
         size = ''
 
     res = []
+    products = pd.read_sql_query(f"""select * from "[{table_name}]" """,con=engine)
     for product in recos:
         handle = product
         try:
             # square brackets [ ] are used to refer to a SQL view
-            title = pd.read_sql_query(f"""select "title" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
+            title = products.loc[products.handle == handle,'title'].iloc[0]
+            img_url = products.loc[products.handle == handle,'img_url'].iloc[0]
+            values = products.loc[products.handle == handle,'price'].values.flatten()
         except Exception as e:
             print(f'Invalid product found after inference: CHECK! {e}')
             continue
-        img_url = pd.read_sql_query(f"""select "img_url" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
-        values = pd.read_sql_query(f"""select "price" from "[{table_name}]" where "handle" = '{product}' """,con=engine).values.flatten()
         if len(set(values)) > 1:
             price = f'Starts from {int(min(values))}'
         else:
@@ -764,6 +765,49 @@ def beautify_recos(recos, engine, payload = None, take_size = False):
         'Price':price, 
         'Size':size } )
     return res
+
+
+# def beautify_recos(recos, engine, payload = None, take_size = False):
+#     """
+#     returns required fields in dict/json format with the product's handle(S) as input,
+#     dont forget to input list of products as input.
+#     eg:
+#     'Handle':item, 'URL':url, 'Title':title, 'Size':size, 'IMGURL':img_url, 'Price':price
+#     """
+#     table_name = 'products'
+#     base_url = 'https://leaclothingco.com/products/'
+
+#     if take_size:
+#         try:
+#             size = get_size(payload)
+#         except:
+#             size = 'NA'
+#     else:
+#         size = ''
+
+#     res = []
+#     for product in recos:
+#         handle = product
+#         try:
+#             # square brackets [ ] are used to refer to a SQL view
+#             title = pd.read_sql_query(f"""select "title" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
+#         except Exception as e:
+#             print(f'Invalid product found after inference: CHECK! {e}')
+#             continue
+#         img_url = pd.read_sql_query(f"""select "img_url" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
+#         values = pd.read_sql_query(f"""select "price" from "[{table_name}]" where "handle" = '{product}' """,con=engine).values.flatten()
+#         if len(set(values)) > 1:
+#             price = f'Starts from {int(min(values))}'
+#         else:
+#             price = f'{int(values[0])}'
+#         url = base_url + handle
+#         res.append( { 'Handle':handle, 
+#         'URL':url, 
+#         'Title':title, 
+#         'IMGURL':img_url, 
+#         'Price':price, 
+#         'Size':size } )
+#     return res
 
 
 def get_size(payload):
