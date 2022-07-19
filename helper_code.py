@@ -363,7 +363,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
         print('Customer order history not found, Skipping CF results')
 
 
-    # 2. else show content based recos
+    # 2. show content based recos
     # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
     part2 = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
 
@@ -413,15 +413,15 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
     # print(f'\nPart1: {part1},\nPart2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5},\n Part6:{part6}')
     
     # sampling recommendations based on priority based function
-    # The five positions for weights represent prob dist of selection from each arr
-    if temp_user.empty:
-        Model_weights = [1.5, 1, 1, 1, 1]
-        results = weighted_sample_without_replacement( arrs= [ part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
+    # The six positions for weights represent prob dist of selection from each arr
+    if not temp_user.empty:
+        # sample results from both collaborative(60%) and rest(40%) from content+demographics+tags(personalized/Non-personalized)+similar_desc
+        Model_weights = [6, 2, 2, 2, 4, 1]
+        results = weighted_sample_without_replacement( arrs= [ part1, part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
         return results
     else:
-        # sample results from both collaborative(60%) and rest(40%) from content+demographics+tags(personalized/Non-personalized)+similar_desc
-        Model_weights = [10, 2, 2, 2, 4, 1]
-        results = weighted_sample_without_replacement( arrs= [ part1, part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
+        Model_weights = [1.5, 1, 1, 1, 1]
+        results = weighted_sample_without_replacement( arrs= [ part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
         return results
         
 
@@ -909,5 +909,5 @@ def filter_results(recos, prices, engine):
 
 def model_fn(engine, testing = False):
     if not testing:
-        process_products(engine, sim_desc_flag=False)
+        process_products(engine, sim_desc_flag=True)
         pre_process(engine)
