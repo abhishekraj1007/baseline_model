@@ -1,39 +1,35 @@
 
-create view "[customers]" as 
+CREATE OR REPLACE VIEW recommendmodel."[customers]" as 
 SELECT email, default_address::json->>'province' as province
-FROM customers;
+FROM recommendmodel.customers;
 
 
-create view "[products]" as
-select b.product_id, b.price, b.option1, a.handle, a.title, a.tags, a.product_type, a.image::json->>'source' as img_url
-FROM product_variants b
-JOIN products a on b.product_id = a.id
+CREATE OR REPLACE VIEW recommendmodel."[products]" as
+select b.product_id, b.price, b.option1, a.handle, a.title, a.tags, a.product_type, a.image::json->>'src' as img_url
+FROM recommendmodel.product_variants b JOIN recommendmodel.products a 
+on b.product_id = a.id
 order by b.product_id;
 
 
-create view "[orders]" as 
+CREATE OR REPLACE VIEW recommendmodel."[orders]" as 
 select b.name as lineitemname, a.email, 
 a.financial_status as financialstatus,
 a.fulfillment_status as fulfillmentstatus,
 a.shipping_address::json->>'province' as shippingprovincename,
 a.name, a.created_at
-from orders a
-join order_lines b on a.id = b.order_id
+from recommendmodel.orders a join recommendmodel.order_lines b on a.id = b.order_id
 order by a.created_at;
 
 
-CREATE OR REPLACE VIEW "[ga_events]"
+CREATE OR REPLACE VIEW recommendmodel."[ga_events]"
  AS
-SELECT latest_ga_ga_events.__hevo_report_date,
-    latest_ga_ga_events.pagepath,
-    latest_ga_ga_events.pageviews,
-    latest_ga_ga_events.uniquepageviews,
-    latest_ga_ga_events.productaddstocart,
-    latest_ga_ga_events.productcheckouts,
-    latest_ga_ga_events.productdetailviews
-   FROM latest_ga_ga_events
-  WHERE latest_ga_ga_events.pagepath::text ~~ '/products/%'::text AND latest_ga_ga_events.__hevo_report_date > (CURRENT_DATE - '3 days'::interval);
-  
-  ALTER TABLE "[ga_events]"
-    OWNER TO lea_clothing;
+SELECT "ga:landingPagePath" as path,
+"ga:pageviews" as views,
+"ga:sessions" as sessions,
+"ga:shoppingStage" as event_type
+FROM recommendmodel."Shopify shopping report"
+WHERE "ga:landingPagePath"::text ~~ '/products/%'::text AND end_date > (CURRENT_DATE - '2 days'::interval);
+
+ALTER TABLE recommendmodel."[ga_events]"
+OWNER TO lea_clothing;
   

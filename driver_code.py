@@ -21,6 +21,7 @@ password = 'leaclothing'
 hostname = 'lea-clothing-db.curvyi9vuuc9.ap-south-1.rds.amazonaws.com'
 postgre_port = '5432'
 db_name = 'lea_clothing_db'
+schema_name = 'recommendmodel'
 # opening connection to postgre
 
 engine = create_engine(f'postgresql://{username}:{password}@{hostname}:{postgre_port}/{db_name}', pool_size=100, max_overflow=-1)
@@ -28,7 +29,7 @@ engine = create_engine(f'postgresql://{username}:{password}@{hostname}:{postgre_
 base_url = 'https://leaclothingco.com/products/'
 
 #train model for the first time
-model_fn(engine=engine)
+model_fn(engine=engine, testing = False, sim_desc_flag=False)
 
 @app.route('/test', methods=['GET'])
 def get_test():
@@ -46,8 +47,8 @@ def get_old_recos():
         table_name = 'tags_profile_unproc'
         ## checking if profile exists
         with engine.connect() as con:
-            recos = con.execute(f"""select "recos" from "{table_name}" where "email" = '{email}'""").fetchone()
-            unproc_data = con.execute(f"""select "unproc_data" from "{table_name}" where "email" = '{email}'""").fetchone()
+            recos = con.execute(f"""select "recos" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
+            unproc_data = con.execute(f"""select "unproc_data" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
         #all required fields are being returned already from the past stored results
         return jsonify({
                             "status" : 200,
@@ -100,7 +101,7 @@ def recommend():
         #initialize results as -1 to avoid adding slow exception checking
         results = -1
 
-        user = pd.read_sql_query(f"""select * from "tags_profile" where "email" = '{email}'""",con=engine).set_index('email', drop = True)
+        user = pd.read_sql_query(f"""select * from {schema_name}."tags_profile" where "email" = '{email}'""",con=engine).set_index('email', drop = True)
         if not user.empty:
             user = user.iloc[0]
             results,display_text = recommend_with_tags(user, engine, reco_count=8)  

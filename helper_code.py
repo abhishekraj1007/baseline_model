@@ -111,12 +111,14 @@ tags_to_question = {
 ('beachvacation','pos'): ("As you're shopping for 'Beach Vacation'",['beachvacation'],[1])
 }
 
+schema_name = 'recommendmodel'
+
 def pre_process(engine):
     #Read Orders file
     table_name = 'orders'
-    orders = pd.read_sql_query(f"""select * from "[{table_name}]" """,con=engine)
+    orders = pd.read_sql_query(f"""select * from {schema_name}."[{table_name}]" """,con=engine)
 
-    print(f'Started processing {table_name} for creating users:')
+    print(f'Started processing {schema_name}.{table_name} for creating users:')
 
     #changing column names for convenience
     cols = orders.columns
@@ -146,12 +148,13 @@ def pre_process(engine):
             if sim_products:
                 sim_demo.loc[state,product] = ','.join(sim_products)
     
+    
     #preparing ga_top_selling events (dumps a pickle file)
-    # print('Processing Google analytics top selling products')
-    # ga_top_selling(engine)
+    print('Processing Google analytics top selling products')
+    ga_top_selling(engine)
     
     #saving hardcoded sim_demo for faster demographic inference
-    sim_demo.to_sql('sim_demo', engine, index = True, if_exists = 'replace' )
+    sim_demo.to_sql('sim_demo', engine, index = True, schema = schema_name, if_exists = 'replace' )
 
     # Selecting required columns
     req = ['name', 'email','lineitemname','financialstatus','fulfillmentstatus']
@@ -219,7 +222,7 @@ def pre_process(engine):
             sim[col][row] = res
     
     sim = pd.DataFrame(sim, columns=ids, index = ids)
-    sim.to_sql('sim', engine, index = True, if_exists = 'replace' )
+    sim.to_sql('sim', engine, index = True, schema = schema_name, if_exists = 'replace' )
     print('Training Corr matrix finished,\nSaving weights.\n')
 
 
@@ -234,8 +237,8 @@ def process_products(engine, sim_desc_flag = False):
     """
 
     table_name = 'products'
-    products = pd.read_sql_query(f'select * from "[{table_name}]"',con=engine)
-    print(f'Started processing {table_name}:')
+    products = pd.read_sql_query(f'select * from {schema_name}."[{table_name}]"',con=engine)
+    print(f'Started processing {schema_name}.{table_name}:')
 
     #create sim_desc for description based product similarity and stores in postgreDB
     if sim_desc_flag == True:
@@ -268,26 +271,26 @@ def process_products(engine, sim_desc_flag = False):
     pickle.dump(product_tags, open('product_tags','wb'))
     pickle.dump(title2handle, open('title2handle','wb'))
 
-    products.to_sql(name ='productsXtags', con=engine, index = True, if_exists = 'replace' )
+    products.to_sql(name ='productsXtags', con=engine, index = True, schema = schema_name, if_exists = 'replace' )
 
     print(f'Setting up schema for processed and unprocessed user profiles\n')
     
     #pending check when to replace/append/delete
     temp = ['dummy@dummy'] + [0] * len(product_tags)
     empty_tag_profile = pd.DataFrame([temp], columns=['email'] + product_tags)
-    empty_tag_profile.to_sql('tags_profile', engine, index = False, if_exists = 'replace')
+    empty_tag_profile.to_sql('tags_profile', engine, index = False, schema = schema_name, if_exists = 'replace')
     
     with engine.connect() as con:
-        con.execute("""ALTER TABLE "tags_profile" ADD PRIMARY KEY ("email")""")
+        con.execute(f"""ALTER TABLE {schema_name}."tags_profile" ADD PRIMARY KEY ("email")""")
     
     #initialize tags_profile_unproc postgre table
     temp = ['dummy@dummy', json.dumps({'a':1}) ,
          json.dumps( {'handle':'item', 'URL':'url', 'title':'title', 'Size':'size', 'IMGURL':'img_url', 'Price':'price'} ) ]
     empty_tag_profile = pd.DataFrame([temp], columns=['email', 'unproc_data', 'recos'])
-    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, if_exists = 'replace')
+    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, schema = schema_name, if_exists = 'replace')
 
     with engine.connect() as con:
-        con.execute("""ALTER TABLE "tags_profile_unproc" ADD PRIMARY KEY ("email")""")
+        con.execute(f"""ALTER TABLE {schema_name}."tags_profile_unproc" ADD PRIMARY KEY ("email")""")
 
     ## pending
     ## add a function to check change in products/tags (check by reading old file)
@@ -371,10 +374,10 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
     # 3. Explore customers data and show frequently bought products in the customer's province
     try:
         customer_table = 'customers'
-        province = pd.read_sql_query(f"""select "province" from "[{customer_table}]" where "email" = '{email}' """,con=engine)
+        province = pd.read_sql_query(f"""select "province" from {schema_name}."[{customer_table}]" where "email" = '{email}' """,con=engine)
         if not province.empty:
             province = province.iloc[0,0]
-            data = pd.read_sql_query(f"""select "{product_handle}" from sim_demo where "index" = '{province}' """, con=engine)
+            data = pd.read_sql_query(f"""select {schema_name}."{product_handle}" from sim_demo where "index" = '{province}' """, con=engine)
             if not data.empty:
                 part3 = data.iloc[0,0].split(',')[:5]
                 print(f'Demographics results included for user from state: {province}')
@@ -391,7 +394,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
     
     # 4. get_similar descriptions based products
     try:
-        data = pd.read_sql_query(f"""select "sim_products" from "sim_desc" where "product" = '{product_handle}' """, con = engine)
+        data = pd.read_sql_query(f"""select {schema_name}."sim_products" from "sim_desc" where "product" = '{product_handle}' """, con = engine)
         if not data.empty:
             part4 = data.iloc[0,0].split(',')[:5]
         else:
@@ -402,7 +405,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
 
 
     # 5. show similar tag based products
-    tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('handle', drop = True)
+    tag_array = pd.read_sql_query(f'SELECT * FROM {schema_name}."{tag_array}"',con=engine).set_index('handle', drop = True)
     tag_profile = tag_array.loc[tag_array.index == product_handle ].iloc[-1,:]
     part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine , standalone = True, n_recos = 6)[1:]
 
@@ -418,11 +421,11 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
         # sample results from both collaborative(60%) and rest(40%) from content+demographics+tags(personalized/Non-personalized)+similar_desc
         Model_weights = [6, 2, 2, 2, 4, 1]
         results = weighted_sample_without_replacement( arrs= [ part1, part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
-        return results
+        return set(results)
     else:
         Model_weights = [1.5, 1, 1, 1, 1]
         results = weighted_sample_without_replacement( arrs= [ part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
-        return results
+        return set(results)
         
 
 def ga_process_prod_name(prod_name):
@@ -436,21 +439,18 @@ def ga_process_prod_name(prod_name):
 
 def ga_top_selling(engine):
     table_name = 'ga_events'
-    google_analytic_prod = pd.read_sql_query(f'select * from "[{table_name}]"',con=engine)
-    df = google_analytic_prod[['pagepath','productdetailviews','productaddstocart','productcheckouts']].copy()
-    print(df.shape)
-    df['pagepath'] = df.apply(lambda x: ga_process_prod_name(x.pagepath), axis=1)
+    df = pd.read_sql_query(f'select * from {schema_name}."[{table_name}]"',con=engine)
+
+    df['path'] = df.path.apply(ga_process_prod_name)
 
     # filtering products which are expired or wrong names/coflicts
-    title2handle = pickle.load(open('title2handle', 'rb'))
-    df = df[df.pagepath.isin(title2handle.values())]
+    products = pickle.load(open('product_names', 'rb'))
+    df = df[ df.path.isin(products) ]
 
-    df['score'] = df['productdetailviews']+df['productaddstocart']
-    df = df.groupby('pagepath')['score'].sum('score').reset_index()
-    df['score']=(df['score']-df['score'].min())/(df['score'].max()-df['score'].min())
-    df.set_index('pagepath', inplace=True)
-    res = df.sort_values(by='score', ascending=False).index.to_list()
-    pickle.dump(res, open('ga_top_selling','wb'))
+    df = df.loc[df.event_type == 'PRODUCT_VIEW']
+    df = df.groupby(['path']).sessions.sum().reset_index().set_index('sessions',drop=True).sort_index(ascending = False)
+    ga_top_selling = df.path.values.tolist()
+    pickle.dump(ga_top_selling, open('ga_top_selling','wb'))
     print('Succesfully saved ga_top_Selling.')
 
         
@@ -480,7 +480,7 @@ def get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim
     Recommendation APi for cart items
     """
     temp_user = get_user(email, engine)
-    sim = pd.read_sql_query(f'select * from {similarity_matrix}',con=engine).set_index('index', drop=True)
+    sim = pd.read_sql_query(f'select * from {schema_name}.{similarity_matrix}',con=engine).set_index('index', drop=True)
     
     # orders history
     if not temp_user.empty:
@@ -588,7 +588,7 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
     """
     note that product ids must be in list format
     """
-    tag_array = pd.read_sql_query(f'SELECT * FROM "{tag_array}"',con=engine).set_index('handle', drop = True)
+    tag_array = pd.read_sql_query(f'SELECT * FROM {schema_name}."{tag_array}"',con=engine).set_index('handle', drop = True)
 
     ## get actual tag based similar products
     tag_res = get_tags_sim(tag_profile, tag_array, n = n_recos)
@@ -618,7 +618,7 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
 
 def get_user_tag_profile(email, indices, engine):
     with engine.connect() as con:
-        values = con.execute(f"""select * from "tags_profile" where "email" = '{email}'""").fetchone()
+        values = con.execute(f"""select * from {schema_name}."tags_profile" where "email" = '{email}'""").fetchone()
     
     if values:
         #skipping email and creating profile with the sparse values
@@ -638,12 +638,12 @@ def store_user_unprocessed(email, data, recos, engine):
 
     ## checking if profile exists
     with engine.connect() as con:
-        user = con.execute(f"""select "email" from "{table_name}" where "email" = '{email}'""").fetchone()
+        user = con.execute(f"""select "email" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
     if user:
         print(f'Updating old Unprocessed data: {user[0]}')
         with engine.connect() as con:
             con.execute(f"""
-            UPDATE "{table_name}"
+            UPDATE {schema_name}."{table_name}"
             SET "email" = '{email}',
             "unproc_data" = '{json.dumps(data)}',
             "recos" = '{json.dumps(recos)}'
@@ -653,7 +653,7 @@ def store_user_unprocessed(email, data, recos, engine):
         # Insert data as user profile not exists
         with engine.connect() as con:
             con.execute(f"""
-            insert into "{table_name}"
+            insert into {schema_name}."{table_name}"
             values ('{email}', '{json.dumps(data)}', '{json.dumps(recos)}')
             """)
         print(f'New user added in unprocessed Data.')
@@ -664,9 +664,9 @@ def store_user(tag_profile, email, engine):
 
     ## checking if profile exists
     with engine.connect() as con:
-        data = con.execute(f"""select "email" from "{table_name}" where "email" = '{email}'""").fetchone()
+        data = con.execute(f"""select "email" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
     if data:
-        print(f'Updating current User profile : {data[0]}\nand')
+        print(f'Updating current User profile : {data[0]}\n')
         s= ''
         for idx,value in zip(tag_profile.index, tag_profile.values):
             temp = idx + '=' + str(int(value)) + ','
@@ -674,7 +674,7 @@ def store_user(tag_profile, email, engine):
         s = s[:-1]
         with engine.connect() as con:
             con.execute(f"""
-            UPDATE "{table_name}"
+            UPDATE {schema_name}."{table_name}"
             SET {s}
             WHERE "email" = '{email}'
             """)
@@ -682,7 +682,7 @@ def store_user(tag_profile, email, engine):
         # Insert data as user profile not exists
         with engine.connect() as con:
             con.execute(f"""
-            insert into "{table_name}"
+            insert into {schema_name}."{table_name}"
             values ('{email}', {str(tag_profile.values.tolist())[1:-1]} )
             """)
         print('New user tag profile added.')
@@ -693,7 +693,7 @@ def get_user(email, engine):
     to get user order history at runtime(get_inference) to be used with .sim matrix -> doctorized product ratings for inference
     """
     table_name = 'orders'
-    orders = pd.read_sql_query(f"""select * from "[{table_name}]" where "email" = '{email}'""",con=engine)
+    orders = pd.read_sql_query(f"""select * from {schema_name}."[{table_name}]" where "email" = '{email}'""",con=engine)
     cols = orders.columns
     cols = [''.join(item for item in entity.split()) for entity in cols]
     orders.columns = cols
@@ -742,7 +742,7 @@ def beautify_recos(recos, engine, payload = None, take_size = False):
         size = ''
 
     res = []
-    products = pd.read_sql_query(f"""select * from "[{table_name}]" """,con=engine)
+    products = pd.read_sql_query(f"""select * from {schema_name}."[{table_name}]" """,con=engine)
     for product in recos:
         handle = product
         try:
@@ -867,18 +867,18 @@ def filter_results(recos, prices, engine):
 
     usage: filter_results(['coco-pink-polka-dot-corset-midi-dress','belle-black-ruffle-tulle-puff-corset-dress'], prices, engine)
     """
-    print('Filtering results...')
+    print('Filtering results...',end='')
     # create a dict-list of recos with prices
     table_name = 'products'
 
     data = []
 
     for product_handle in recos:
-        values = pd.read_sql_query(f"""select "price" from "[{table_name}]" where "handle" = '{product_handle}' """,
+        values = pd.read_sql_query(f"""select "price" from {schema_name}."[{table_name}]" where "handle" = '{product_handle}' """,
                                 con=engine).values.flatten()
         price = (int(min(values)), int(max(values)) )
 
-        product_type = pd.read_sql_query(f"""select "product_type" from "[{table_name}]" where "handle" = '{product_handle}' """,
+        product_type = pd.read_sql_query(f"""select "product_type" from {schema_name}."[{table_name}]" where "handle" = '{product_handle}' """,
                                                                                             con=engine).iloc[0,0]
         custom_type = type_mappings.get(product_type, "Dresses")
         
@@ -902,12 +902,11 @@ def filter_results(recos, prices, engine):
         if not ((product_high < user_low) or (product_low > user_high)):
             # append results
             results.append(product[0])
-
     print('filtered.')
     # return product_handles
     return results
 
-def model_fn(engine, testing = False):
+def model_fn(engine, testing = False, sim_desc_flag=True):
     if not testing:
-        process_products(engine, sim_desc_flag=True)
+        process_products(engine, sim_desc_flag=sim_desc_flag)
         pre_process(engine)
