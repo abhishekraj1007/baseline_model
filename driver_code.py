@@ -58,7 +58,7 @@ def get_old_recos():
     except Exception as e:
         return jsonify({
                         "status" : 500,
-                        "message" : repr(e),
+                        "message" : [repr(e),str(e)],
                         "response" : None
                         })
     
@@ -85,7 +85,7 @@ def cart():
     except Exception as e:
         return jsonify( {
                         "status" : 500,
-                        "message" : repr(e),
+                        "message" : [repr(e),str(e)],
                         "response" : None} )
 
 
@@ -121,7 +121,7 @@ def recommend():
     except Exception as e:
         return jsonify( {
                         "status" : 500,
-                        "message" : repr(e),
+                        "message" : [repr(e),str(e)],
                         "response" : None } )
 
 
@@ -169,7 +169,7 @@ def personalize():
     except Exception as e:
         return jsonify( {
                         "status" : 500,
-                        "message" : repr(e),
+                        "message" : [repr(e),str(e)],
                         "response" : None} )
     
 

@@ -363,7 +363,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
         print('Customer order history not found, Skipping CF results')
 
 
-    # 2. else show content based recos
+    # 2. show content based recos
     # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
     part2 = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
 
@@ -413,15 +413,15 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
     # print(f'\nPart1: {part1},\nPart2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5},\n Part6:{part6}')
     
     # sampling recommendations based on priority based function
-    # The five positions for weights represent prob dist of selection from each arr
-    if temp_user.empty:
-        Model_weights = [1.5, 1, 1, 1, 1]
-        results = weighted_sample_without_replacement( arrs= [ part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
+    # The six positions for weights represent prob dist of selection from each arr
+    if not temp_user.empty:
+        # sample results from both collaborative(60%) and rest(40%) from content+demographics+tags(personalized/Non-personalized)+similar_desc
+        Model_weights = [6, 2, 2, 2, 4, 1]
+        results = weighted_sample_without_replacement( arrs= [ part1, part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
         return results
     else:
-        # sample results from both collaborative(60%) and rest(40%) from content+demographics+tags(personalized/Non-personalized)+similar_desc
-        Model_weights = [10, 2, 2, 2, 4, 1]
-        results = weighted_sample_without_replacement( arrs= [ part1, part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
+        Model_weights = [1.5, 1, 1, 1, 1]
+        results = weighted_sample_without_replacement( arrs= [ part2, part3, part4, part5, part6 ], weight_each_arr = Model_weights, k=reco_count)
         return results
         
 
@@ -720,7 +720,7 @@ def get_user(email, engine):
     user_profile[orders.lineitemname.values] = orders.rating.values
     
     # print(user_profile[user_profile!=0])
-    return user_profile    
+    return user_profile
 
 
 def beautify_recos(recos, engine, payload = None, take_size = False):
@@ -742,16 +742,17 @@ def beautify_recos(recos, engine, payload = None, take_size = False):
         size = ''
 
     res = []
+    products = pd.read_sql_query(f"""select * from "[{table_name}]" """,con=engine)
     for product in recos:
         handle = product
         try:
             # square brackets [ ] are used to refer to a SQL view
-            title = pd.read_sql_query(f"""select "title" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
+            title = products.loc[products.handle == handle,'title'].iloc[0]
+            img_url = products.loc[products.handle == handle,'img_url'].iloc[0]
+            values = products.loc[products.handle == handle,'price'].values.flatten()
         except Exception as e:
             print(f'Invalid product found after inference: CHECK! {e}')
             continue
-        img_url = pd.read_sql_query(f"""select "img_url" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
-        values = pd.read_sql_query(f"""select "price" from "[{table_name}]" where "handle" = '{product}' """,con=engine).values.flatten()
         if len(set(values)) > 1:
             price = f'Starts from {int(min(values))}'
         else:
@@ -764,6 +765,49 @@ def beautify_recos(recos, engine, payload = None, take_size = False):
         'Price':price, 
         'Size':size } )
     return res
+
+
+# def beautify_recos(recos, engine, payload = None, take_size = False):
+#     """
+#     returns required fields in dict/json format with the product's handle(S) as input,
+#     dont forget to input list of products as input.
+#     eg:
+#     'Handle':item, 'URL':url, 'Title':title, 'Size':size, 'IMGURL':img_url, 'Price':price
+#     """
+#     table_name = 'products'
+#     base_url = 'https://leaclothingco.com/products/'
+
+#     if take_size:
+#         try:
+#             size = get_size(payload)
+#         except:
+#             size = 'NA'
+#     else:
+#         size = ''
+
+#     res = []
+#     for product in recos:
+#         handle = product
+#         try:
+#             # square brackets [ ] are used to refer to a SQL view
+#             title = pd.read_sql_query(f"""select "title" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
+#         except Exception as e:
+#             print(f'Invalid product found after inference: CHECK! {e}')
+#             continue
+#         img_url = pd.read_sql_query(f"""select "img_url" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
+#         values = pd.read_sql_query(f"""select "price" from "[{table_name}]" where "handle" = '{product}' """,con=engine).values.flatten()
+#         if len(set(values)) > 1:
+#             price = f'Starts from {int(min(values))}'
+#         else:
+#             price = f'{int(values[0])}'
+#         url = base_url + handle
+#         res.append( { 'Handle':handle, 
+#         'URL':url, 
+#         'Title':title, 
+#         'IMGURL':img_url, 
+#         'Price':price, 
+#         'Size':size } )
+#     return res
 
 
 def get_size(payload):
@@ -863,7 +907,7 @@ def filter_results(recos, prices, engine):
     # return product_handles
     return results
 
-def model_fn(engine, testing = True):
+def model_fn(engine, testing = False):
     if not testing:
-        process_products(engine, sim_desc_flag=False)
+        process_products(engine, sim_desc_flag=True)
         pre_process(engine)
