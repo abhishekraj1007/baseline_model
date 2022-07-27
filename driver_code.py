@@ -29,7 +29,7 @@ engine = create_engine(f'postgresql://{username}:{password}@{hostname}:{postgre_
 base_url = 'https://leaclothingco.com/products/'
 
 #train model for the first time
-model_fn(engine=engine, testing = False, sim_desc_flag=False)
+model_fn(engine=engine, testing = True, sim_desc_flag=False)
 
 @app.route('/test', methods=['GET'])
 def get_test():
