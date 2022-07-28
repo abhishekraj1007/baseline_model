@@ -910,3 +910,4 @@ def filter_results(recos, prices, engine):
 def model_fn(engine, testing = False, sim_desc_flag=True):
     if not testing:
         process_products(engine, sim_desc_flag=sim_desc_flag)
+        pre_process(engine)
