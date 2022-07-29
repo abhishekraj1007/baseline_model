@@ -127,7 +127,7 @@ def process_products(engine, sim_desc_flag = False, crontype = False):
 
     table_name = 'products'
     products = pd.read_sql_query(f'select * from {schema_name}."[{table_name}]"',con=engine)
-    print(f'\nStarted processing {table_name} at: {datetime.now()} with "crontype" = {crontype}\n')
+    print(f'Started processing {table_name}')
 
     #create sim_desc for description based product similarity and stores in postgreDB
     if sim_desc_flag == True:
@@ -180,7 +180,7 @@ def process_products(engine, sim_desc_flag = False, crontype = False):
     # Also cronjob will not run without the above table, because it needs to compare with that.
 
     if crontype:
-        print('Checking if tags got changed...')
+        print('Entered cron\nChecking if tags got changed...')
         #this file should exist when code runs this way through cron job
         try:
             old_tags = pickle.load(open('product_tags','rb'))
@@ -969,6 +969,18 @@ def filter_results(recos, prices, engine):
     return results
 
 
-def model_fn(engine, sim_desc_flag=True, crontype=False):
+def model_fn(engine, sim_desc_flag=False, crontype=False):
     process_products(engine, sim_desc_flag=sim_desc_flag, crontype = crontype)
     pre_process(engine)
+
+
+def cronjob(engine):
+    #initiate a log
+    with open('lea_cron_log','a') as f:
+        print(f'scheduler running at {datetime.now()}')
+        f.write(str(datetime.now()) + '\n')
+    #run model with crontype=True
+    try:
+        model_fn(engine, sim_desc_flag=False, crontype=True)
+    except Exception as e:
+        pass

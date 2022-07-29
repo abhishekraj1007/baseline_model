@@ -1,6 +1,7 @@
 from helper_code import beautify_recos, filter_results, recommend_without_tags, recommend_with_tags, get_similar_cart_items
 from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed, beautify_recos
 from helper_code import model_fn, filter_results
+from helper_code import cronjob
 
 import os
 import pandas as pd
@@ -30,6 +31,18 @@ base_url = 'https://leaclothingco.com/products/'
 
 #train model for the first time
 model_fn(engine=engine, sim_desc_flag=False, crontype=False)
+
+from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+scheduler = BackgroundScheduler()
+trigger = CronTrigger(
+        year="*", month="*", day="*", hour="*", minute="0", second="0"
+    )
+scheduler.add_job(func=lambda: cronjob(engine), trigger=trigger)
+scheduler.start()
+
 
 @app.route('/test', methods=['GET'])
 def get_test():
@@ -193,10 +206,8 @@ def personalize():
 
 if __name__ == '__main__':
     try:
-        print('Entered code: __main__')
+        print('Entered: __main__')
         app.run(port= os.environ.get('AWS_PORT', 5000) )
-    except KeyboardInterrupt:
-        print(f'Server closed.')
     except Exception as e:
         print('\nCODE CRASHED once due to: {e}\n')
     
