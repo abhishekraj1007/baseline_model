@@ -1,0 +1,22 @@
+version : '3.7'
+services:
+  baseline_model:
+    build: .
+    expose:
+      - 5000
+    restart: 'always'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.flask.rule=Host(`api.leaclothingco.com`)"
+      - "traefik.http.routers.flask.tls=true"
+      - "traefik.http.routers.flask.tls.certresolver=letsencrypt"
+
+  traefik:
+    image: traefik:v2.2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./:/etc/traefik"
+      - "./cert/acme.json:/acme.json"
