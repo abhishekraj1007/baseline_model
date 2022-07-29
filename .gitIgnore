@@ -23,5 +23,6 @@ order_export_1.csv
 customers_export.csv
 products_export_1.csv
 Procfile
-ga_top_selling
 stress.py
+ga_top_selling
+lea_cron_log

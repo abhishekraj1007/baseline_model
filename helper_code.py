@@ -10,6 +10,7 @@ from tqdm import tqdm
 import random
 from random import choices
 import json
+from datetime import datetime
 
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
@@ -68,20 +69,20 @@ tags_to_question = {
 ('offshoulder','pos'):('Because you like to highlight your \n"Collarbones"',['offshoulder','strapless'],[1,1]),
 ('strapless','pos'):('Because you like to highlight your \n"Collarbones"',['offshoulder','strapless'],[1,1]),
 
-('sleeves','pos'):('Because you uncomfortable showing \n"Arms"',['sleeves'],1),
-('bodycon','neg'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
-('croptop','neg'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
-('highwaist','pos'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
-('skater','pos'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
-('shift','pos'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
-('slip','pos'):('Because you uncomfortable showing \n"Waist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
-('midi','pos'):('Because you uncomfortable showing \n"Legs"',['midi','gown','pants','maxi'],[1,1,1,1]),
-('gown','post'):('Because you uncomfortable showing \n"Legs"',['midi','gown','pants','maxi'],[1,1,1,1]),
-('pants','post'):('Because you uncomfortable showing \n"Legs"',['midi','gown','pants','maxi'],[1,1,1,1]),
-('maxi','post'):('Because you uncomfortable showing \n"Legs"',['midi','gown','pants','maxi'],[1,1,1,1]),
-('backless','neg'):('Because you uncomfortable showing \n"Back"',['backless'],[-1]),
-('strapless','neg'):('Because you uncomfortable showing \n"Collarbones"',['offshoulder','strapless'],[-1,-1]),
-('offshoulder','neg'):('Because you uncomfortable showing \n"Collarbones"',['offshoulder','strapless'],[-1,-1]),
+('sleeves','pos'):('Because you like \n"Sleeves"',['sleeves'],1),
+('bodycon','neg'):('Because you like \n"Bodycon"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('croptop','neg'):('Because you like \n"CropTop"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('highwaist','pos'):('Because you like \n"HighWaist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('skater','pos'):('Because you like \n"Skater"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('shift','pos'):('Because you like \n"Shift"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('slip','pos'):('Because you like \n"Slip"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('midi','pos'):('Because you like \n"Midi"',['midi','gown','pants','maxi'],[1,1,1,1]),
+('gown','post'):('Because you like \n"Gown"',['midi','gown','pants','maxi'],[1,1,1,1]),
+('pants','post'):('Because you like \n"Pants"',['midi','gown','pants','maxi'],[1,1,1,1]),
+('maxi','post'):('Because you like \n"Maxi"',['midi','gown','pants','maxi'],[1,1,1,1]),
+('backless','neg'):('You may also like',['backless'],[-1]),
+('strapless','neg'):('Because you like \n"Strapless"',['offshoulder','strapless'],[-1,-1]),
+('offshoulder','neg'):('Because you like \n"off-shoulder"',['offshoulder','strapless'],[-1,-1]),
 
 ('petite','pos'):("Because you're Petite in height",['petite'],[1]),
 ('average','pos'):("Because you're Average in height",['average'],[1]),
@@ -113,12 +114,114 @@ tags_to_question = {
 
 schema_name = 'recommendmodel'
 
+
+def process_products(engine, sim_desc_flag = False, crontype = False):
+    """
+    Function to initialize things and will be used for retraining, other purpose it serves:
+    1. To check if products data has changed, if yes creates new product and tags mappings stored in db.
+    2. Stores products tags in order, in order to be used later.
+    3. Same as (2) for Product names.
+    4. Dumps a Title to Header names mapping file.
+    5. initializes tags profile database with schema
+    """
+
+    table_name = 'products'
+    products = pd.read_sql_query(f'select * from {schema_name}."[{table_name}]"',con=engine)
+    print(f'Started processing {table_name}')
+
+    #create sim_desc for description based product similarity and stores in postgreDB
+    if sim_desc_flag == True:
+        from description_helper import create_sim_desc
+        print(f'Started creating similar description mappings')
+        create_sim_desc(products, engine)
+
+    ## dropping duplicates
+    products.drop_duplicates(subset='title', keep="first", inplace= True)
+    products.dropna(subset=['title','tags'], inplace = True)
+    products.reset_index(inplace=True, drop = True)
+    title2handle = dict(zip(products.title, products.handle))
+
+    products = products[['handle','tags']]
+    products.tags = products.tags.apply(lambda x: x.split(', ') if len(x)>1 else [])
+    products = products.explode('tags')
+
+    #drop rows having nan values as tags after the .explode step from list->rows
+    products.dropna(subset=['tags'], inplace = True)
+
+    products.tags = products.tags.apply(lambda x: ''.join( item.lower() for item in x.replace('-','').replace("'",'').split() ))
+    products['count'] = 1
+    products = products.pivot_table('count', ['handle'],'tags')
+    products.fillna(0, inplace = True)
+    ## dropping products list, Tags list, title2handle dict and saving productsXtags into postgre db
+    product_names = products.index.to_list()
+    product_tags = products.columns.to_list()
+    pickle.dump(product_names, open('product_names','wb'))
+    pickle.dump(title2handle, open('title2handle','wb'))
+    products.to_sql(name ='productsXtags', con=engine, index = True, schema = schema_name, if_exists = 'replace' )
+    
+
+    #check if table does not exists, then create new
+    with engine.connect() as con:
+        table_proc = con.execute(f"""SELECT to_regclass('{schema_name}.tags_profile')""").fetchone()
+    if not table_proc[0]:
+        print(f'Setting up schema for processed user profiles\n')
+        #pending check when to replace/append/delete
+        temp = ['dummy@dummy'] + [0] * len(product_tags)
+        empty_tag_profile = pd.DataFrame([temp], columns=['email'] + product_tags)
+        empty_tag_profile.to_sql('tags_profile', engine, index = False, schema = schema_name, if_exists = 'replace')
+        
+        with engine.connect() as con:
+            con.execute(f"""ALTER TABLE {schema_name}."tags_profile" ADD PRIMARY KEY ("email")""")
+    else:
+        print('tags_profile table already exists.')
+
+    #The purpose of putting this part of tag below tags_profile creation is to avoid those circumstances
+    # where server needs to be run due to any issues
+    # Also cronjob will not run without the above table, because it needs to compare with that.
+
+    if crontype:
+        print('Entered cron\nChecking if tags got changed...')
+        #this file should exist when code runs this way through cron job
+        try:
+            old_tags = pickle.load(open('product_tags','rb'))
+            pickle.dump(product_tags, open('product_tags','wb'))
+            #check if tags got changed and we need to restructure the tag_array
+            change_in_tags = set.symmetric_difference( set(product_tags), set(old_tags))
+            if len(change_in_tags) > 0:
+                update_tag_schema(engine)
+            else:
+                print('No tags were updated at croncheck.')
+        except FileNotFoundError:
+            print('Cron ran before Flask server or Couldnt found Old product tags file\n')
+        except Exception as e:
+            print(e,'  Error in Updating tag schema')
+    
+    #check if table does not exists, then create new
+    with engine.connect() as con:
+        table_unproc = con.execute(f"""SELECT to_regclass('{schema_name}.tags_profile_unproc')""").fetchone()
+    if not table_unproc[0]:
+        print(f'Setting up schema for unprocessed user profiles')
+        #initialize tags_profile_unproc postgre table
+        temp = ['dummy@dummy', json.dumps({'a':1}) ,
+            json.dumps( {'handle':'item', 'URL':'url', 'title':'title', 'Size':'size', 'IMGURL':'img_url', 'Price':'price'} ) ]
+        empty_tag_profile = pd.DataFrame([temp], columns=['email', 'unproc_data', 'recos'])
+        empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, schema = schema_name, if_exists = 'replace')
+
+        with engine.connect() as con:
+            con.execute(f"""ALTER TABLE {schema_name}."tags_profile_unproc" ADD PRIMARY KEY ("email")""")
+    else:
+        print('tags_profile_Unproc table already exists.')
+
+    #now save this file to let the model run normally
+    pickle.dump(product_tags, open('product_tags','wb'))
+        
+
 def pre_process(engine):
     #Read Orders file
     table_name = 'orders'
     orders = pd.read_sql_query(f"""select * from {schema_name}."[{table_name}]" """,con=engine)
 
-    print(f'Started processing {schema_name}.{table_name} for creating users:')
+    print(f'Started processing {table_name} for creating users:')
 
     #changing column names for convenience
     cols = orders.columns
@@ -147,7 +250,6 @@ def pre_process(engine):
             # print(state, product, sim_products, sep='::',end='\n\n')
             if sim_products:
                 sim_demo.loc[state,product] = ','.join(sim_products)
-    
     
     #preparing ga_top_selling events (dumps a pickle file)
     print('Processing Google analytics top selling products')
@@ -196,12 +298,9 @@ def pre_process(engine):
 
     print(f'initializing corr matrix...')
     sim = np.zeros((len(ids),len(ids)))
-    
     #Making correlation matrix using ADJUSTED COSINE SIMILARITY
-
     avg_item_ratings = orders.values.mean(axis = 1)
 #     avg_item_ratings = np.true_divide(orders.sum(axis = 1),(orders!=0).sum(axis = 1))
-
 
     for row in tqdm(range(len(ids))):
         for col in range(len(ids)):
@@ -226,74 +325,37 @@ def pre_process(engine):
     print('Training Corr matrix finished,\nSaving weights.\n')
 
 
-def process_products(engine, sim_desc_flag = False):
+def update_tag_schema(engine):
     """
-    Function to initialize things and will be used for retraining, other purpose it serves:
-    1. To check if products data has changed, if yes creates new product and tags mappings stored in db.
-    2. Stores products tags in order, in order to be used later.
-    3. Same as (2) for Product names.
-    4. Dumps a Title to Header names mapping file.
-    5. initializes tags profile database with schema
-    """
+    Update complete tags_profile table in postgre in case Tags metadata of products gets changed
+    """ 
+    tag_array = 'tags_profile'
+    product_tags = pickle.load(open('product_tags','rb'))
+    tag_profile = pd.read_sql_query(f'SELECT * FROM {schema_name}."{tag_array}"',con=engine).set_index('email', drop = True)
 
-    table_name = 'products'
-    products = pd.read_sql_query(f'select * from {schema_name}."[{table_name}]"',con=engine)
-    print(f'Started processing {schema_name}.{table_name}:')
+    if tag_profile.empty:
+        print('Something went wrong, Tags profile is empty')
+        return
 
-    #create sim_desc for description based product similarity and stores in postgreDB
-    if sim_desc_flag == True:
-        from description_helper import create_sim_desc
-        print(f'Started creating similar description mappings')
-        create_sim_desc(products, engine)
+    difference_tags = list(set(tag_profile.columns) - set(product_tags))
+    print('These Tags were outdated: ',difference_tags)
+    tag_profile.drop(difference_tags, axis = 1, inplace = True)
 
-    ## dropping duplicates
-    products.drop_duplicates(subset='title', keep="first", inplace= True)
-    products.dropna(subset=['title','tags'], inplace = True)
-    products.reset_index(inplace=True, drop = True)
-    title2handle = dict(zip(products.title, products.handle))
+    res = []
+    for i,row in enumerate(tag_profile.iterrows()):
+        values = dict(zip(row[1].index, row[1].values))
+        values['email'] = row[0]
+        res.append(values)
 
-    products = products[['handle','tags']]
-    products.tags = products.tags.apply(lambda x: x.split(', ') if len(x)>1 else [])
-    products = products.explode('tags')
+    df = pd.DataFrame(res,columns=['email']+ product_tags)
+    df.iloc[:,1:] = df.iloc[:,1:].fillna(0).astype(int)
 
-    #drop rows having nan values as tags after the .explode step from list->rows
-    products.dropna(subset=['tags'], inplace = True)
+    print(f'Setting up Updated Schema as Tags data got changed\n')
 
-    products.tags = products.tags.apply(lambda x: ''.join( item.lower() for item in x.replace('-','').replace("'",'').split() ))
-    products['count'] = 1
-    products = products.pivot_table('count', ['handle'],'tags')
-    products.fillna(0, inplace = True)
-    
-    ## dropping products list, Tags list, title2handle dict and saving productsXtags into postgre db
-    product_names = products.index.to_list()
-    product_tags = products.columns.to_list()
-    pickle.dump(product_names, open('product_names','wb'))
-    pickle.dump(product_tags, open('product_tags','wb'))
-    pickle.dump(title2handle, open('title2handle','wb'))
+    df.to_sql('tags_profile', engine, index = False, schema = schema_name, if_exists = 'replace')
 
-    products.to_sql(name ='productsXtags', con=engine, index = True, schema = schema_name, if_exists = 'replace' )
-
-    print(f'Setting up schema for processed and unprocessed user profiles\n')
-    
-    #pending check when to replace/append/delete
-    temp = ['dummy@dummy'] + [0] * len(product_tags)
-    empty_tag_profile = pd.DataFrame([temp], columns=['email'] + product_tags)
-    empty_tag_profile.to_sql('tags_profile', engine, index = False, schema = schema_name, if_exists = 'replace')
-    
     with engine.connect() as con:
         con.execute(f"""ALTER TABLE {schema_name}."tags_profile" ADD PRIMARY KEY ("email")""")
-    
-    #initialize tags_profile_unproc postgre table
-    temp = ['dummy@dummy', json.dumps({'a':1}) ,
-         json.dumps( {'handle':'item', 'URL':'url', 'title':'title', 'Size':'size', 'IMGURL':'img_url', 'Price':'price'} ) ]
-    empty_tag_profile = pd.DataFrame([temp], columns=['email', 'unproc_data', 'recos'])
-    empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, schema = schema_name, if_exists = 'replace')
-
-    with engine.connect() as con:
-        con.execute(f"""ALTER TABLE {schema_name}."tags_profile_unproc" ADD PRIMARY KEY ("email")""")
-
-    ## pending
-    ## add a function to check change in products/tags (check by reading old file)
 
 
 def recommend_with_tags(user, engine, reco_count):
@@ -907,7 +969,18 @@ def filter_results(recos, prices, engine):
     return results
 
 
-def model_fn(engine, testing = False, sim_desc_flag=True):
-    if not testing:
-        process_products(engine, sim_desc_flag=sim_desc_flag)
-        pre_process(engine)
+def model_fn(engine, sim_desc_flag=False, crontype=False):
+    process_products(engine, sim_desc_flag=sim_desc_flag, crontype = crontype)
+    pre_process(engine)
+
+
+def cronjob(engine):
+    #initiate a log
+    with open('lea_cron_log','a') as f:
+        print(f'scheduler running at {datetime.now()}')
+        f.write(str(datetime.now()) + '\n')
+    #run model with crontype=True
+    try:
+        model_fn(engine, sim_desc_flag=False, crontype=True)
+    except Exception as e:
+        pass

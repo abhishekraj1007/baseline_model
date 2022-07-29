@@ -1,6 +1,7 @@
 from helper_code import beautify_recos, filter_results, recommend_without_tags, recommend_with_tags, get_similar_cart_items
 from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed, beautify_recos
 from helper_code import model_fn, filter_results
+from helper_code import cronjob
 
 import os
 import pandas as pd
@@ -29,7 +30,19 @@ engine = create_engine(f'postgresql://{username}:{password}@{hostname}:{postgre_
 base_url = 'https://leaclothingco.com/products/'
 
 #train model for the first time
-model_fn(engine=engine, testing = True, sim_desc_flag=False)
+model_fn(engine=engine, sim_desc_flag=False, crontype=False)
+
+from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+scheduler = BackgroundScheduler()
+trigger = CronTrigger(
+        year="*", month="*", day="*", hour="*", minute="*", second="0"
+    )
+scheduler.add_job(func=lambda: cronjob(engine), trigger=trigger)
+scheduler.start()
+
 
 @app.route('/test', methods=['GET'])
 def get_test():
@@ -45,16 +58,27 @@ def get_old_recos():
     try:
         email = request.args["email"]
         table_name = 'tags_profile_unproc'
+
+        active_products = []
         ## checking if profile exists
         with engine.connect() as con:
             recos = con.execute(f"""select "recos" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
             unproc_data = con.execute(f"""select "unproc_data" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
+        
+        if recos:
+        #filtering outdated product to avoid displaying as cached results
+            product_names = pickle.load(open('product_names','rb'))
+            for item in json.loads(recos[0]):
+                handle = item['Handle']
+                if handle in product_names:
+                    active_products.append(item)
+
         #all required fields are being returned already from the past stored results
         return jsonify({
                             "status" : 200,
                             "message" : 'Success',
-                            "response" : {'recos': json.loads(recos[0]) if recos else dict() ,
-        'form_data': json.loads(unproc_data[0]) if unproc_data else dict()}   
+                            "response" : {'recos': active_products if active_products else {} ,
+        'form_data': json.loads(unproc_data[0]) if unproc_data else {}}
                         })
     except Exception as e:
         return jsonify({
@@ -62,7 +86,6 @@ def get_old_recos():
                         "message" : [repr(e),str(e)],
                         "response" : None
                         })
-    
 
 
 @app.route('/cart',methods=['GET'])
@@ -104,16 +127,23 @@ def recommend():
         user = pd.read_sql_query(f"""select * from {schema_name}."tags_profile" where "email" = '{email}'""",con=engine).set_index('email', drop = True)
         if not user.empty:
             user = user.iloc[0]
-            results,display_text = recommend_with_tags(user, engine, reco_count=8)  
+            results,display_text = recommend_with_tags(user, engine, reco_count=8)
+
         if results == -1:
             print('User tag profile not found')
             results = recommend_without_tags(email, product_handle , engine, reco_count = 8)
             # set display text as normal recommendation engine is used
             display_text = 'Products based on your browsing history'
+            beautified_results = beautify_recos(recos = results, engine=engine)
         else:
             print('User tag profile found')
-            
-        beautified_results = beautify_recos(recos = results, engine=engine)
+            ## Getting payload from unproc_json data
+            table_name = 'tags_profile_unproc'
+            with engine.connect() as con:
+                unproc_data = con.execute(f"""select "unproc_data" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
+            payload = json.loads(unproc_data[0])
+            beautified_results = beautify_recos(recos = results, engine=engine,payload = payload, take_size =True)
+        
         return jsonify( {
                         "status" : 200,
                         "message" : 'Success',
@@ -176,10 +206,8 @@ def personalize():
 
 if __name__ == '__main__':
     try:
-        print('Entered code: __main__')
+        print('Entered: __main__')
         app.run(port= os.environ.get('AWS_PORT', 5000) )
-    except KeyboardInterrupt:
-        print(f'Server closed.')
     except Exception as e:
         print('\nCODE CRASHED once due to: {e}\n')
     
