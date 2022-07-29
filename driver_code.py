@@ -30,7 +30,7 @@ engine = create_engine(f'postgresql://{username}:{password}@{hostname}:{postgre_
 base_url = 'https://leaclothingco.com/products/'
 
 #train model for the first time
-model_fn(engine=engine, sim_desc_flag=False, crontype=False)
+model_fn(engine=engine, sim_desc_flag=True, crontype=False)
 
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -38,7 +38,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 scheduler = BackgroundScheduler()
 trigger = CronTrigger(
-        year="*", month="*", day="*", hour="*", minute="*", second="0"
+        year="*", month="*", day="*", hour="*", minute="1/2", second="0"
     )
 scheduler.add_job(func=lambda: cronjob(engine), trigger=trigger)
 scheduler.start()

@@ -981,6 +981,6 @@ def cronjob(engine):
         f.write(str(datetime.now()) + '\n')
     #run model with crontype=True
     try:
-        model_fn(engine, sim_desc_flag=False, crontype=True)
+        model_fn(engine, sim_desc_flag=True, crontype=True)
     except Exception as e:
         pass
