@@ -115,7 +115,7 @@ tags_to_question = {
 schema_name = 'recommendmodel'
 
 
-def process_products(engine, sim_desc_flag = False, crontype = False):
+def process_products(engine, sim_desc_flag = True, crontype = False):
     """
     Function to initialize things and will be used for retraining, other purpose it serves:
     1. To check if products data has changed, if yes creates new product and tags mappings stored in db.
@@ -969,7 +969,7 @@ def filter_results(recos, prices, engine):
     return results
 
 
-def model_fn(engine, sim_desc_flag=False, crontype=False):
+def model_fn(engine, sim_desc_flag=True, crontype=False):
     process_products(engine, sim_desc_flag=sim_desc_flag, crontype = crontype)
     pre_process(engine)
 
