@@ -38,7 +38,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 scheduler = BackgroundScheduler()
 trigger = CronTrigger(
-        year="*", month="*", day="*", hour="1/2", minute="0", second="0"
+        year="*", month="*", day="*", hour="1/12", minute="0", second="0"
     )
 scheduler.add_job(func=lambda: cronjob(engine), trigger=trigger)
 scheduler.start()
