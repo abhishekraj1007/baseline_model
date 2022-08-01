@@ -658,24 +658,26 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
     if not standalone:
         if ids:
             title2handle = pickle.load(open(title2handle, 'rb'))
-            ids = [title2handle[item] for item in ids]
+            handles = []
+            for item in ids:
+                handle = title2handle(item,-1)
+                #checking for invalid styles selection from hardcoded data on frontend
+                if handle!=-1:
+                    handles.append(handle)
             #get similar products from the selected product styles by the user on popup page
             res = []
-            size_each = n_recos//len(ids) + 1
-            for pid in ids:
+            size_each = n_recos//len(handles) + 1
+            for pid in handles:
 #                 print(base_url + pid)
                 tag_profile_temp = tag_array.loc[pid]
                 tag_array_temp = tag_array.loc[tag_res]
                 res.extend( get_tags_sim( tag_profile_temp, tag_array_temp ,  n = size_each) )
+            #return mixed results
+            return list(set(res))
         else:
             print('No Styles selected by the user, skipping..')
-            return tag_res
-            
-        #return mixed results
-        return list(set(res))
-    else:
-        #return tag based recommendations only
-        return tag_res
+    #return tag based recommendations only
+    return tag_res
 
 
 def get_user_tag_profile(email, indices, engine):
@@ -936,16 +938,19 @@ def filter_results(recos, prices, engine):
     data = []
 
     for product_handle in recos:
-        values = pd.read_sql_query(f"""select "price" from {schema_name}."[{table_name}]" where "handle" = '{product_handle}' """,
-                                con=engine).values.flatten()
-        price = (int(min(values)), int(max(values)) )
+        try:
+            values = pd.read_sql_query(f"""select "price" from {schema_name}."[{table_name}]" where "handle" = '{product_handle}' """,
+                                    con=engine).values.flatten()
+            price = (int(min(values)), int(max(values)) )
 
-        product_type = pd.read_sql_query(f"""select "product_type" from {schema_name}."[{table_name}]" where "handle" = '{product_handle}' """,
-                                                                                            con=engine).iloc[0,0]
-        custom_type = type_mappings.get(product_type, "Dresses")
-        
-        ## 0: product_handle, 1: product type, 2:prices(low/high)
-        data.append( (product_handle, custom_type, price) )
+            product_type = pd.read_sql_query(f"""select "product_type" from {schema_name}."[{table_name}]" where "handle" = '{product_handle}' """,
+                                                                                                con=engine).iloc[0,0]
+            custom_type = type_mappings.get(product_type, "Dresses")
+            
+            ## 0: product_handle, 1: product type, 2:prices(low/high)
+            data.append( (product_handle, custom_type, price) )
+        except:
+            print('Invalid product found after inference')
     
     ## finally filter results based on type of clothe
     results = []
