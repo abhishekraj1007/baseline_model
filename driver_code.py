@@ -37,6 +37,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 scheduler = BackgroundScheduler()
+# Scheduler will run once every 12 hours once in a day at XX:00:00
 trigger = CronTrigger(
         year="*", month="*", day="*", hour="1/12", minute="0", second="0"
     )

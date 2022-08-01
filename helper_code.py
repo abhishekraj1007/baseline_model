@@ -658,16 +658,12 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
     if not standalone:
         if ids:
             title2handle = pickle.load(open(title2handle, 'rb'))
-            handles = []
-            for item in ids:
-                handle = title2handle(item,-1)
-                #checking for invalid styles selection from hardcoded data on frontend
-                if handle!=-1:
-                    handles.append(handle)
+            #checking for invalid styles selection from hardcoded data on frontend
+            ids = list( map( title2handle.get,filter(lambda x: True if x in title2handle.keys() else False, ids) ) )
             #get similar products from the selected product styles by the user on popup page
             res = []
-            size_each = n_recos//len(handles) + 1
-            for pid in handles:
+            size_each = n_recos//len(ids) + 1
+            for pid in ids:
 #                 print(base_url + pid)
                 tag_profile_temp = tag_array.loc[pid]
                 tag_array_temp = tag_array.loc[tag_res]
@@ -730,7 +726,7 @@ def store_user(tag_profile, email, engine):
     with engine.connect() as con:
         data = con.execute(f"""select "email" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
     if data:
-        print(f'Updating current User profile : {data[0]}\n')
+        print(f'Updating current User profile : {data[0]}')
         s= ''
         for idx,value in zip(tag_profile.index, tag_profile.values):
             temp = idx + '=' + str(int(value)) + ','
