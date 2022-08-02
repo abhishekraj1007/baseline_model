@@ -133,7 +133,10 @@ def process_products(engine, sim_desc_flag = True, crontype = False):
     if sim_desc_flag == True:
         from description_helper import create_sim_desc
         print(f'Started creating similar description mappings')
-        create_sim_desc(products, engine)
+        try:
+            create_sim_desc(products, engine)
+        except Exception as e:
+            print(f"Exception as similar description creation : {e}")
 
     ## dropping duplicates
     products.drop_duplicates(subset='title', keep="first", inplace= True)
@@ -275,12 +278,6 @@ def pre_process(engine):
     
     orders = orders[['email', 'lineitemname', 'rating']]
     orders.reset_index(drop=True, inplace=True)
-
-    # #preparing for missing products in training data to avoid errors at inference
-    # missing_ids = list(set(product_names) - set(orders.lineitemname.unique()))
-    # print(missing_ids)
-    # for pid in missing_ids:
-    #     orders.loc[len(orders.index)] = [str(pid) +'@Dummy', pid, 5]
     
     # pivoting tables for training data
     orders = orders.pivot_table('rating',['email'],'lineitemname')
@@ -825,49 +822,6 @@ def beautify_recos(recos, engine, payload = None, take_size = False):
         'Price':price, 
         'Size':size } )
     return res
-
-
-# def beautify_recos(recos, engine, payload = None, take_size = False):
-#     """
-#     returns required fields in dict/json format with the product's handle(S) as input,
-#     dont forget to input list of products as input.
-#     eg:
-#     'Handle':item, 'URL':url, 'Title':title, 'Size':size, 'IMGURL':img_url, 'Price':price
-#     """
-#     table_name = 'products'
-#     base_url = 'https://leaclothingco.com/products/'
-
-#     if take_size:
-#         try:
-#             size = get_size(payload)
-#         except:
-#             size = 'NA'
-#     else:
-#         size = ''
-
-#     res = []
-#     for product in recos:
-#         handle = product
-#         try:
-#             # square brackets [ ] are used to refer to a SQL view
-#             title = pd.read_sql_query(f"""select "title" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
-#         except Exception as e:
-#             print(f'Invalid product found after inference: CHECK! {e}')
-#             continue
-#         img_url = pd.read_sql_query(f"""select "img_url" from "[{table_name}]" where "handle" = '{product}' """,con=engine).iloc[0,0]
-#         values = pd.read_sql_query(f"""select "price" from "[{table_name}]" where "handle" = '{product}' """,con=engine).values.flatten()
-#         if len(set(values)) > 1:
-#             price = f'Starts from {int(min(values))}'
-#         else:
-#             price = f'{int(values[0])}'
-#         url = base_url + handle
-#         res.append( { 'Handle':handle, 
-#         'URL':url, 
-#         'Title':title, 
-#         'IMGURL':img_url, 
-#         'Price':price, 
-#         'Size':size } )
-#     return res
 
 
 def get_size(payload):
