@@ -453,7 +453,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
     
     # 4. get_similar descriptions based products
     try:
-        data = pd.read_sql_query(f"""select {schema_name}."sim_products" from "sim_desc" where "product" = '{product_handle}' """, con = engine)
+        data = pd.read_sql_query(f"""select "sim_products" from {schema_name}."sim_desc" where "product" = '{product_handle}' """, con = engine)
         if not data.empty:
             part4 = data.iloc[0,0].split(',')[:5]
         else:
