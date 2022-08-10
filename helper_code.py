@@ -29,7 +29,6 @@ type_mappings = {
 
 'Dresses':'Dresses',
 'Dress':'Dresses',
-'Gown':'Dresses',
 'Coord Set':'Dresses',
 'Jumpsuit':'Dresses',
 'Jumpsuits & Rompers':'Dresses',
@@ -48,7 +47,12 @@ type_mappings = {
 
 'Detachable Sleeves':'Accessories',
 'Belt':'Accessories',
-'Gift Cards':'Accessories'
+'Gift Cards':'Accessories',
+
+'Saree':'Ethnicwear',
+'Blouse':'Ethnicwear',
+'Lehenga':'Ethnicwear',
+'Gown':'Ethnicwear'
 }
 
 
@@ -96,20 +100,28 @@ tags_to_question = {
 
 ('floral','pos'): ("As you're fan of 'Prints'",['floral'],[1]),
 ('resort','pos'): ("As you're fan of 'Prints'",['resort'],[1]),
-('abstract','pos'): ("As you're fan of 'Prints'",['abstract'],[1]),
+('3d','pos'): ("As you're fan of 'Prints'",['3d','handembroidery'],[1,1]),
+('handembroidery','pos'): ("As you're fan of 'Prints'",['3d','handembroidery'],[1,1]),
 ('graphic','pos'): ("As you're fan of 'Prints'",['graphic'],[1]),
 ('geometric','pos'): ("As you're fan of 'Prints'",['geometric'],[1]),
-('stripes','pos'): ("As you're fan of 'Prints'",['stripes'],[1]),
-('checkered','pos'): ("As you're fan of 'Prints'",['checkered'],[1]),
+('pearlembroidery','pos'): ("As you're fan of 'Prints'",['pearlembroidery'],[1]),
+('sequins','pos'): ("As you're fan of 'Prints'",['sequins','rhinestones'],[1,1]),
+('rhinestones','pos'): ("As you're fan of 'Prints'",['sequins','rhinestones'],[1,1]),
 
 ('birthday','pos'): ("As you're shopping for 'birthday'",['birthday'],[1]),
 ('graduation','pos'): ("As you're shopping for 'graduation'",['graduation'],[1]),
+('mehendi','pos'): ("As you're shopping for 'Mehendi / Haldi'",['mehendi','haldi'],[1,1]),
+('haldi','pos'): ("As you're shopping for 'Mehendi / Haldi'",['mehendi','haldi'],[1,1]),
 ('bridalshower','pos'): ("As you're shopping for 'Bridal Shower'",['bridalshower'],[1]),
-('bachelorette','pos'): ("As you're shopping for 'Bachelorette'",['bachelorette'],[1]),
+('cocktail','pos'): ("As you're shopping for 'Cocktail' party",['cocktail'],[1]),
 ('datenight','pos'): ("As you're shopping for 'Date Night'",['datenight'],[1]),
-('party','pos'): ("As you're shopping for 'Party'",['party'],[1]),
-('concert','pos'): ("As you're shopping for 'Concert'",['concert'],[1]),
-('beachvacation','pos'): ("As you're shopping for 'Beach Vacation'",['beachvacation'],[1])
+('festivewear','pos'): ("As you're shopping for 'Festive Wear'",['festivewear'],[1]),
+('beach','pos'): ("As you're shopping for 'Beach / Resortwear'",['beach','resortwear'],[1,1]),
+('resortwear','pos'): ("As you're shopping for 'Beach / Resortwear'",['beach','resortwear'],[1,1]),
+('weddingwear','pos'): ("As you're shopping for 'Wedding Wear'",['weddingwear'],[1]),
+('party','pos'): ("As you're shopping for 'Party / Concert'",['party','concert'],[1,1]),
+('concert','pos'): ("As you're shopping for 'Party / Concert'",['party','concert'],[1,1]),
+('elevatedbasics','pos'): ("As you Like 'Elevated Basics'",['elevatedbasics'],[1])
 }
 
 schema_name = 'recommendmodel'
