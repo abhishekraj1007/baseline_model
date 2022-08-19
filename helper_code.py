@@ -737,8 +737,8 @@ def store_user(tag_profile, email, engine):
     if data:
         print(f'Updating current User profile : {data[0]}')
         s= ''
-        for idx,value in zip(tag_profile.index, tag_profile.values):
-            temp = idx + '=' + str(int(value)) + ','
+        for tag,value in zip(tag_profile.index, tag_profile.values):
+            temp = '"' + tag + '"=' + str(int(value)) + ','
             s+= temp
         s = s[:-1]
         with engine.connect() as con:
