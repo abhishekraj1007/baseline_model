@@ -671,7 +671,7 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
             ids = list( map( title2handle.get,filter(lambda x: True if x in title2handle.keys() else False, ids) ) )
             #get similar products from the selected product styles by the user on popup page
             res = []
-            size_each = n_recos//len(ids) + 1
+            size_each = max(n_recos//len(ids) - 5, 5)
             for pid in ids:
 #                 print(base_url + pid)
                 tag_profile_temp = tag_array.loc[pid]
