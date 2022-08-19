@@ -182,7 +182,7 @@ def personalize():
         
         ## passing postgre engine object to get tag based inference using tag array
         tag_plus_style = get_tag_based_inference(tag_profile, 'productsXtags' , engine , title2handle = 'title2handle', ids = ids,
-                                                                                standalone = False, n_recos = 20)
+                                                                                standalone = False, n_recos = 30)
 
         #filtering results based on user given price range
         price_dict = data["spend categories"]["value"]
