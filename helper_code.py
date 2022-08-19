@@ -578,11 +578,11 @@ def get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim
             res.append([item,score])
         
         res.sort(key = lambda x: x[1], reverse = True)
-        res = [product for (product,score) in res[:5]]
+        res = [product for (product,score) in res[:8]]
     else:
         print('order history not found, using content based(sim) filtering for CART...')
         # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
-        res = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
+        res = sim.loc[:,product_handle].sort_values(ascending = False)[1:9].index.to_list()
     
     return res
 
