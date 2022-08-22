@@ -2,6 +2,7 @@ from helper_code import beautify_recos, filter_results, recommend_without_tags, 
 from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed, beautify_recos
 from helper_code import model_fn, filter_results
 from helper_code import cronjob
+from helper_code import update_product
 
 import os
 import pandas as pd
@@ -43,6 +44,13 @@ trigger = CronTrigger(
     )
 scheduler.add_job(func=lambda: cronjob(engine), trigger=trigger)
 scheduler.start()
+
+
+@app.route('/product-update-check', methods=['POST'])
+def product_update_check():
+    json_dict = request.json
+    update_product(json_dict,engine)
+    model_fn(engine, sim_desc_flag=False, crontype=True)
 
 
 @app.route('/test', methods=['GET'])

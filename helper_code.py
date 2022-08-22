@@ -231,7 +231,7 @@ def process_products(engine, sim_desc_flag = True, crontype = False):
     pickle.dump(product_tags, open('product_tags','wb'))
         
 
-def pre_process(engine):
+def init_model(engine):
     #Read Orders file
     table_name = 'orders'
     orders = pd.read_sql_query(f"""select * from {schema_name}."[{table_name}]" """,con=engine)
@@ -737,8 +737,8 @@ def store_user(tag_profile, email, engine):
     if data:
         print(f'Updating current User profile : {data[0]}')
         s= ''
-        for tag,value in zip(tag_profile.index, tag_profile.values):
-            temp = '"' + tag + '"=' + str(int(value)) + ','
+        for column,value in zip(tag_profile.index, tag_profile.values):
+            temp = '"' + column + '"=' + str(int(value)) + ','
             s+= temp
         s = s[:-1]
         with engine.connect() as con:
@@ -790,6 +790,43 @@ def get_user(email, engine):
     
     # print(user_profile[user_profile!=0])
     return user_profile
+
+def update_product(json_dict, engine):
+    table_name = 'products'
+    # Fetching pid for the product to update
+    pid = json_dict.pop('id')
+
+    ## checking if profile exists
+    with engine.connect() as con:
+        data = con.execute(f"""select "id" from {schema_name}."{table_name}" where "id" = '{pid}'""").fetchone()
+
+    if data:
+        print(f'Updating current product id : {data[0]}')
+        s= ''
+        for column,value in json_dict.items():
+            value = value.replace("'",'"')
+            temp = '"' + column + '"' + '=' + "'" + str(value).replace('None','null').replace('True','true') + "'" + ","
+            s+= temp
+        s = s[:-1]
+        with engine.connect() as con:
+            con.execute(f"""
+            UPDATE {schema_name}."{table_name}"
+            SET {s}
+            WHERE "id" = '{pid}'
+            """)
+    else:
+        # Insert data as user profile not exists
+        s = """"""
+        for value in json_dict.values():
+            s+= "'" + str(value).replace('None','null').replace('True','true').replace("'",'"') + "'" + ","
+        s = s[:-1]
+
+        with engine.connect() as con:
+            con.execute(f"""
+            insert into {schema_name}."{table_name}"
+            values ('{pid}', {s} )
+            """)
+        print('New Product Added.')
 
 
 def beautify_recos(recos, engine, payload = None, take_size = False):
@@ -938,7 +975,7 @@ def filter_results(recos, prices, engine):
 
 def model_fn(engine, sim_desc_flag=True, crontype=False):
     process_products(engine, sim_desc_flag=sim_desc_flag, crontype = crontype)
-    pre_process(engine)
+    init_model(engine)
 
 
 def cronjob(engine):
