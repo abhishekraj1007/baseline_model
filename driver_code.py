@@ -45,18 +45,26 @@ trigger = CronTrigger(
 scheduler.add_job(func=lambda: cronjob(engine), trigger=trigger)
 scheduler.start()
 
+@app.route('/test', methods=['GET'])
+def get_test():
+    return "Success....."
+
 
 @app.route('/product-update-check', methods=['POST'])
 def product_update_check():
     try:
         json_dict = request.json
-        update_product(json_dict,engine)
+        if len(json_dict) == 1:
+            response = update_product(json_dict,engine, delete = True)
+        else:
+            response = update_product(json_dict,engine)
+        
         model_fn(engine, sim_desc_flag=False, crontype=True)
-    #all required fields are being returned already from the past stored results
+        
         return jsonify({
                             "status" : 200,
                             "message" : 'Success',
-                            "response" : {'Data updated successfully.'}
+                            "response" : response
                         })
     except Exception as e:
         return jsonify({
@@ -64,11 +72,6 @@ def product_update_check():
                         "message" : [repr(e),str(e)],
                         "response" : None
                         })
-
-
-@app.route('/test', methods=['GET'])
-def get_test():
-    return "Success....."
 
 
 @app.route("/check-user", methods = ['GET'])
