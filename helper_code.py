@@ -810,7 +810,7 @@ def update_product(json_dict, engine, delete = False):
         return 'product removed, updating weights...'
 
     if data:
-        print(f'Updating current product id : {data[0]}')
+        print(f'Updating current product id : {data[0]}\n')
         s= ''
         for column,value in json_dict.items():
             temp = '"' + column + '"' + '=' + "'" + str(value).replace("'",'"').replace('None','null').replace('True','true') + "'" + ","
@@ -835,6 +835,7 @@ def update_product(json_dict, engine, delete = False):
             insert into {schema_name}."{table_name}"
             values ('{pid}', {s} )
             """)
+        print('Product was added..\n')
         return 'New Product Added!'
 
 

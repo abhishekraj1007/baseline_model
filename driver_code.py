@@ -45,6 +45,7 @@ trigger = CronTrigger(
 scheduler.add_job(func=lambda: cronjob(engine), trigger=trigger)
 scheduler.start()
 
+
 @app.route('/test', methods=['GET'])
 def get_test():
     return "Success....."
@@ -70,10 +71,10 @@ def update_stylesheet():
                         })
 
 
-@app.route('/get-styles', method = ['GET'])
+@app.route('/get-styles', methods = ['GET'])
 def get_stylesheet():
     table_name = 'stylesheet'
-    styles = pd.read_sql_query(f"""select * from {schema_name}."[{table_name}]" """,con=engine).to_dict('index')
+    styles = pd.read_sql_query(f"""select * from {schema_name}."{table_name}" """,con=engine).to_dict('record')
     return jsonify(styles)
 
 
