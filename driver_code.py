@@ -48,9 +48,22 @@ scheduler.start()
 
 @app.route('/product-update-check', methods=['POST'])
 def product_update_check():
-    json_dict = request.json
-    update_product(json_dict,engine)
-    model_fn(engine, sim_desc_flag=False, crontype=True)
+    try:
+        json_dict = request.json
+        update_product(json_dict,engine)
+        model_fn(engine, sim_desc_flag=False, crontype=True)
+    #all required fields are being returned already from the past stored results
+        return jsonify({
+                            "status" : 200,
+                            "message" : 'Success',
+                            "response" : {'Data updated successfully.'}
+                        })
+    except Exception as e:
+        return jsonify({
+                        "status" : 500,
+                        "message" : [repr(e),str(e)],
+                        "response" : None
+                        })
 
 
 @app.route('/test', methods=['GET'])
