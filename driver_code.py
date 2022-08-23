@@ -50,6 +50,33 @@ def get_test():
     return "Success....."
 
 
+@app.route('/update-styles', methods=['POST'])
+def update_stylesheet():
+    table_name = 'stylesheet'
+    try:
+        json_dict = request.json
+        df = pd.DataFrame(json_dict, columns=['attribute', 'value', 'imgUrl'])
+        df.to_sql(table_name, engine, index = False, schema = schema_name, if_exists = 'replace')
+        return jsonify({
+                            "status" : 200,
+                            "message" : 'Success',
+                            "response" : 'Styles were updated.'
+                        })
+    except Exception as e:
+        return jsonify({
+                        "status" : 500,
+                        "message" : [repr(e),str(e)],
+                        "response" : None
+                        })
+
+
+@app.route('/get-styles', method = ['GET'])
+def get_stylesheet():
+    table_name = 'stylesheet'
+    styles = pd.read_sql_query(f"""select * from {schema_name}."[{table_name}]" """,con=engine).to_dict('index')
+    return jsonify(styles)
+
+
 @app.route('/product-update-check', methods=['POST'])
 def product_update_check():
     try:
