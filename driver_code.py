@@ -51,6 +51,34 @@ def get_test():
     return "Success....."
 
 
+@app.route('/product-update-check', methods=['POST'])
+def product_update_check():
+    try:
+        json_dict = request.json
+        if len(json_dict) == 1:
+            update_product(json_dict,engine, delete = True)
+        else:
+            update_product(json_dict,engine,table_name='products')
+            # Updating variants
+            for i in range(len(json_dict['variants'])):
+                update_product(json_dict['variants'][i],engine,table_name='product_variants')
+        
+        # model_fn(engine, sim_desc_flag=False, crontype=True)
+        
+        return jsonify({
+                            "status" : 200,
+                            "message" : 'Success',
+                            "response" : 'Product data modified.'
+                        })
+
+    except Exception as e:
+        return jsonify({
+                        "status" : 500,
+                        "message" : [repr(e),str(e)],
+                        "response" : None
+                        })
+
+
 @app.route('/update-styles', methods=['POST'])
 def update_stylesheet():
     table_name = 'stylesheet'
@@ -76,30 +104,6 @@ def get_stylesheet():
     table_name = 'stylesheet'
     styles = pd.read_sql_query(f"""select * from {schema_name}."{table_name}" """,con=engine).to_dict('record')
     return jsonify(styles)
-
-
-@app.route('/product-update-check', methods=['POST'])
-def product_update_check():
-    try:
-        json_dict = request.json
-        if len(json_dict) == 1:
-            response = update_product(json_dict,engine, delete = True)
-        else:
-            response = update_product(json_dict,engine)
-        
-        model_fn(engine, sim_desc_flag=False, crontype=True)
-        
-        return jsonify({
-                            "status" : 200,
-                            "message" : 'Success',
-                            "response" : response
-                        })
-    except Exception as e:
-        return jsonify({
-                        "status" : 500,
-                        "message" : [repr(e),str(e)],
-                        "response" : None
-                        })
 
 
 @app.route("/check-user", methods = ['GET'])
