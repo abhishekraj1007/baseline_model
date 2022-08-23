@@ -291,9 +291,15 @@ def init_model(engine):
     orders = orders[['email', 'lineitemname', 'rating']]
     orders.reset_index(drop=True, inplace=True)
     
+    #Compensating for missing ids in training data to avoid errors at inference
+    missing_ids = set(product_names) - set(orders.lineitemname.unique())
+    for pid in missing_ids:
+        orders.loc[len(orders.index)] = [str(pid) +'@Dummy', pid, 2.5]
+
     # pivoting tables for training data
     orders = orders.pivot_table('rating',['email'],'lineitemname')
-    orders = orders.reindex(columns=product_names)
+    #Dont reindex when setting missing Ids above using dummy emails
+    # orders = orders.reindex(columns=product_names)
     orders.fillna(0, inplace = True)
 
     #dumping avg_item_ratings
