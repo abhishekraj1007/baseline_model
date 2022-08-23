@@ -804,8 +804,7 @@ def update_product(json_dict, engine):
         print(f'Updating current product id : {data[0]}')
         s= ''
         for column,value in json_dict.items():
-            value = value.replace("'",'"')
-            temp = '"' + column + '"' + '=' + "'" + str(value).replace('None','null').replace('True','true') + "'" + ","
+            temp = '"' + column + '"' + '=' + "'" + str(value).replace("'",'"').replace('None','null').replace('True','true') + "'" + ","
             s+= temp
         s = s[:-1]
         with engine.connect() as con:
@@ -815,7 +814,7 @@ def update_product(json_dict, engine):
             WHERE "id" = '{pid}'
             """)
     else:
-        # Insert data as user profile not exists
+        # Insert product as it does not exists
         s = """"""
         for value in json_dict.values():
             s+= "'" + str(value).replace('None','null').replace('True','true').replace("'",'"') + "'" + ","
