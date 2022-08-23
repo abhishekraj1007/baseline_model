@@ -218,7 +218,7 @@ def process_products(engine, sim_desc_flag = True, crontype = False):
         print(f'Setting up schema for unprocessed user profiles')
         #initialize tags_profile_unproc postgre table
         temp = ['dummy@dummy', json.dumps({'a':1}) ,
-            json.dumps( {'handle':'item', 'URL':'url', 'title':'title', 'Size':'size', 'IMGURL':'img_url', 'Price':'price'} ) ]
+            json.dumps( {'Handle':'item', 'URL':'url', 'Title':'title', 'Size':'size', 'IMGURL':'img_url', 'Price':'price'} ) ]
         empty_tag_profile = pd.DataFrame([temp], columns=['email', 'unproc_data', 'recos'])
         empty_tag_profile.to_sql('tags_profile_unproc', engine, index = False, schema = schema_name, if_exists = 'replace')
 
@@ -810,7 +810,7 @@ def update_product(json_dict, engine, delete = False):
         return 'product removed, updating weights...'
 
     if data:
-        print(f'Updating current product id : {data[0]}')
+        print(f'Updating current product id : {data[0]}\n')
         s= ''
         for column,value in json_dict.items():
             temp = '"' + column + '"' + '=' + "'" + str(value).replace("'",'"').replace('None','null').replace('True','true') + "'" + ","
@@ -835,6 +835,7 @@ def update_product(json_dict, engine, delete = False):
             insert into {schema_name}."{table_name}"
             values ('{pid}', {s} )
             """)
+        print('Product was added..\n')
         return 'New Product Added!'
 
 
