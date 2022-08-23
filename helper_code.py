@@ -402,7 +402,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
     """
     
     temp_user = get_user(email, engine)
-    sim = pd.read_sql_query(f'select * from {similarity_matrix}',con=engine).set_index('index', drop=True)
+    sim = pd.read_sql_query(f"""select * from {schema_name}."{similarity_matrix}" """,con=engine).set_index('index', drop=True)
     
     # 1. Based on orders history (Collaborative filtering)
     if not temp_user.empty:
@@ -439,7 +439,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
 
     # 2. show content based recos
     # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
-    part2 = sim.loc[:,product_handle].sort_values(ascending = False)[1:6].index.to_list()
+    part2 = sim.loc[:,product_handle].sort_values(ascending = False)[1:10].index.to_list()
 
     # Demographics Based
     # 3. Explore customers data and show frequently bought products in the customer's province
@@ -478,10 +478,10 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
     # 5. show similar tag based products
     tag_array = pd.read_sql_query(f'SELECT * FROM {schema_name}."{tag_array}"',con=engine).set_index('handle', drop = True)
     tag_profile = tag_array.loc[tag_array.index == product_handle ].iloc[-1,:]
-    part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine , standalone = True, n_recos = 6)[1:]
+    part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine , standalone = True, n_recos = 10)[1:]
 
     # 6. Top selling products info from Google Analytics
-    part6 = pickle.load(open(f'ga_top_selling','rb'))[:5]
+    part6 = pickle.load(open(f'ga_top_selling','rb'))[:10]
 
     #print output and verify results
     # print(f'\nPart1: {part1},\nPart2: {part2},\n Part3:{part3},\n Part4:{part4},\n Part5:{part5},\n Part6:{part6}')
@@ -524,7 +524,7 @@ def ga_top_selling(engine):
     pickle.dump(ga_top_selling, open('ga_top_selling','wb'))
     print('Succesfully saved ga_top_Selling.')
 
-        
+
 def weighted_sample_without_replacement(arrs, weight_each_arr, k=2):
     population = []
     weights = []
@@ -791,8 +791,7 @@ def get_user(email, engine):
     # print(user_profile[user_profile!=0])
     return user_profile
 
-def update_product(json_dict, engine, delete = False):
-    table_name = 'products'
+def update_product(json_dict, engine, delete = False, table_name = 'products'):
     # Fetching pid for the product to update
     pid = json_dict.pop('id')
 
@@ -805,9 +804,11 @@ def update_product(json_dict, engine, delete = False):
             #if exists, delete
             with engine.connect() as con:
                 con.execute(f"""DELETE from {schema_name}."{table_name}" where "id" = '{pid}'""")
+            with engine.connect() as con:
+                con.execute(f"""DELETE from {schema_name}."product_variants" where "product_id" = '{pid}'""")
         else:
             print('Product not found.')
-        return 'product removed, updating weights...'
+        print('product removed, updating weights...\n')
 
     if data:
         print(f'Updating current product id : {data[0]}\n')
@@ -822,7 +823,7 @@ def update_product(json_dict, engine, delete = False):
             SET {s}
             WHERE "id" = '{pid}'
             """)
-        return 'Product info updated'
+        print('Product info updated.\n')
     else:
         # Insert product as it does not exists
         s = """"""
@@ -836,7 +837,6 @@ def update_product(json_dict, engine, delete = False):
             values ('{pid}', {s} )
             """)
         print('Product was added..\n')
-        return 'New Product Added!'
 
 
 def beautify_recos(recos, engine, payload = None, take_size = False):
