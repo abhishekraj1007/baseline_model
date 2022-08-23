@@ -791,7 +791,7 @@ def get_user(email, engine):
     # print(user_profile[user_profile!=0])
     return user_profile
 
-def update_product(json_dict, engine):
+def update_product(json_dict, engine, delete = False):
     table_name = 'products'
     # Fetching pid for the product to update
     pid = json_dict.pop('id')
@@ -799,6 +799,15 @@ def update_product(json_dict, engine):
     ## checking if profile exists
     with engine.connect() as con:
         data = con.execute(f"""select "id" from {schema_name}."{table_name}" where "id" = '{pid}'""").fetchone()
+
+    if delete == True:
+        if data:
+            #if exists, delete
+            with engine.connect() as con:
+                con.execute(f"""DELETE from {schema_name}."{table_name}" where "id" = '{pid}'""")
+        else:
+            print('Product not found.')
+        return 'product removed, updating weights...'
 
     if data:
         print(f'Updating current product id : {data[0]}')
@@ -813,6 +822,7 @@ def update_product(json_dict, engine):
             SET {s}
             WHERE "id" = '{pid}'
             """)
+        return 'Product info updated'
     else:
         # Insert product as it does not exists
         s = """"""
@@ -825,7 +835,7 @@ def update_product(json_dict, engine):
             insert into {schema_name}."{table_name}"
             values ('{pid}', {s} )
             """)
-        print('New Product Added.')
+        return 'New Product Added!'
 
 
 def beautify_recos(recos, engine, payload = None, take_size = False):
