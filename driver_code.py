@@ -72,6 +72,7 @@ def product_update_check():
                         })
 
     except Exception as e:
+        print(f'Error at Product updation part:{[repr(e),str(e)]}')
         return jsonify({
                         "status" : 500,
                         "message" : [repr(e),str(e)],
