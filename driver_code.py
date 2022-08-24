@@ -152,7 +152,9 @@ def cart():
     To recommend similar products in the cart
     """
     try:
-        email = request.args.get("email",' ')
+        email = request.args.get("email",'new@user')
+        if email == '':
+            email = 'new@user'
         product_title = request.args['product_title']
         
         title2handle = pickle.load(open('title2handle', 'rb'))
@@ -174,7 +176,9 @@ def cart():
 @app.route('/recommend',methods=['GET'])
 def recommend():
     try:
-        email = request.args.get("email",' ')
+        email = request.args.get("email",'new@user')
+        if email == '':
+            email = 'new@user'
         product_title = request.args['product_title']
         title2handle = pickle.load(open('title2handle', 'rb'))
         product_handle = title2handle[product_title]
