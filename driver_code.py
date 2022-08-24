@@ -63,7 +63,7 @@ def product_update_check():
             for i in range(len(json_dict['variants'])):
                 update_product(json_dict['variants'][i],engine,table_name='product_variants')
         
-        # model_fn(engine, sim_desc_flag=False, crontype=True)
+        model_fn(engine, sim_desc_flag=False, crontype=True)
         
         return jsonify({
                             "status" : 200,
