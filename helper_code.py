@@ -437,7 +437,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
             res.append([item,score])
         
         res.sort(key = lambda x: x[1], reverse = True)
-        part1 = [product for (product,score) in res[:5]]
+        part1 = [product for (product,score) in res[:10]]
     else:
         part1 = []
         print('Customer order history not found, Skipping CF results')
@@ -445,7 +445,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
 
     # 2. show content based recos
     # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
-    part2 = sim.loc[:,product_handle].sort_values(ascending = False)[1:10].index.to_list()
+    part2 = sim.loc[:,product_handle].sort_values(ascending = False)[1:11].index.to_list()
 
     # Demographics Based
     # 3. Explore customers data and show frequently bought products in the customer's province
@@ -456,7 +456,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
             province = province.iloc[0,0]
             data = pd.read_sql_query(f"""select {schema_name}."{product_handle}" from sim_demo where "index" = '{province}' """, con=engine)
             if not data.empty:
-                part3 = data.iloc[0,0].split(',')[:5]
+                part3 = data.iloc[0,0].split(',')[:7]
                 print(f'Demographics results included for user from state: {province}')
             else:
                 # print('Demographics data not found')
@@ -473,7 +473,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
     try:
         data = pd.read_sql_query(f"""select "sim_products" from {schema_name}."sim_desc" where "product" = '{product_handle}' """, con = engine)
         if not data.empty:
-            part4 = data.iloc[0,0].split(',')[:5]
+            part4 = data.iloc[0,0].split(',')[:10]
         else:
             part4 = []
     except Exception as e:
@@ -484,7 +484,7 @@ def recommend_without_tags(email, product_handle, engine, reco_count = 10, avg_i
     # 5. show similar tag based products
     tag_array = pd.read_sql_query(f'SELECT * FROM {schema_name}."{tag_array}"',con=engine).set_index('handle', drop = True)
     tag_profile = tag_array.loc[tag_array.index == product_handle ].iloc[-1,:]
-    part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine , standalone = True, n_recos = 10)[1:]
+    part5 = get_tag_based_inference(tag_profile, 'productsXtags' , engine , standalone = True, n_recos = 12)[1:]
 
     # 6. Top selling products info from Google Analytics
     part6 = pickle.load(open(f'ga_top_selling','rb'))[:10]
@@ -584,11 +584,11 @@ def get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim
             res.append([item,score])
         
         res.sort(key = lambda x: x[1], reverse = True)
-        res = [product for (product,score) in res[:8]]
+        res = [product for (product,score) in res[:15]]
     else:
         print('order history not found, using content based(sim) filtering for CART...')
         # print( sim.loc[product_handle,:].nlargest(reco_count+1).index[1:])
-        res = sim.loc[:,product_handle].sort_values(ascending = False)[1:9].index.to_list()
+        res = sim.loc[:,product_handle].sort_values(ascending = False)[1:15].index.to_list()
     
     return res
 
@@ -677,7 +677,7 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
             ids = list( map( title2handle.get,filter(lambda x: True if x in title2handle.keys() else False, ids) ) )
             #get similar products from the selected product styles by the user on popup page
             res = []
-            size_each = max(n_recos//len(ids) - 5, 5)
+            size_each = max(n_recos//len(ids) - 4, 5)
             for pid in ids:
 #                 print(base_url + pid)
                 tag_profile_temp = tag_array.loc[pid]
@@ -869,6 +869,9 @@ def beautify_recos(recos, engine, payload = None, take_size = False):
         handle = product
         try:
             # square brackets [ ] are used to refer to a SQL view
+            product_status = products.loc[products.handle == handle,'status'].iloc[0]
+            if not product_status=='active':
+                continue
             title = products.loc[products.handle == handle,'title'].iloc[0]
             img_url = products.loc[products.handle == handle,'img_url'].iloc[0]
             values = products.loc[products.handle == handle,'price'].values.flatten()
