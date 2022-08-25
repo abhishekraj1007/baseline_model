@@ -998,12 +998,13 @@ def model_fn(engine, sim_desc_flag=True, crontype=False):
 
 
 def cronjob(engine):
-    #initiate a log
-    with open('lea_cron_log','a') as f:
-        print(f'scheduler running at {datetime.now()}')
-        f.write(str(datetime.now()) + '\n')
     #run model with crontype=True
+    print(f'scheduler running at {datetime.now()}')
     try:
         model_fn(engine, sim_desc_flag=True, crontype=True)
+        #initiate a log
+        with open('lea_cron_log','a') as f:
+            f.write(str(datetime.now()) + '\n')
     except Exception as e:
-        pass
+        with open('lea_cron_log','a') as f:
+            f.write(f'scheduler running at {datetime.now()}, EXCEPTION at: {[repr(e),str(e)]}' + '\n')
