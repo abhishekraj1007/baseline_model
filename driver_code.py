@@ -195,7 +195,7 @@ def recommend():
             print('User tag profile not found')
             results = recommend_without_tags(email, product_handle , engine, reco_count = 12)
             # set display text as normal recommendation engine is used
-            display_text = 'Products based on your browsing history'
+            display_text = "We Think You'd Like these Lea Looks"
             beautified_results = beautify_recos(recos = results, engine=engine)
         else:
             print('User tag profile found')
