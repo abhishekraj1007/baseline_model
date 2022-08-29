@@ -3,6 +3,7 @@ from helper_code import  create_profile, store_user, get_tag_based_inference, st
 from helper_code import model_fn, filter_results
 from helper_code import cronjob
 from helper_code import update_product
+from helper_code import get_search_based
 
 import os
 import pandas as pd
@@ -49,6 +50,24 @@ scheduler.start()
 @app.route('/test', methods=['GET'])
 def get_test():
     return "Success....."
+
+
+@app.route('/search', methods = ['GET'])
+def search_products():
+    try:
+        query = request.args["query"]
+        results, display_text = get_search_based(query, engine)
+        beautified_results = beautify_recos(recos = results, engine=engine)[:8]
+        return jsonify( {
+                        "status" : 200,
+                        "message" : 'Success',
+                        "response" : {'beautified_results':beautified_results,'display_text':display_text} } )
+    
+    except Exception as e:
+        return jsonify( {
+                        "status" : 500,
+                        "message" : [repr(e),str(e)],
+                        "response" : None } )
 
 
 @app.route('/product-update-check', methods=['POST'])

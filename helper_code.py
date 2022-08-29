@@ -11,6 +11,7 @@ import random
 from random import choices
 import json
 from datetime import datetime
+from fuzzywuzzy import fuzz,process
 
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
@@ -689,6 +690,20 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
             print('No Styles selected by the user, skipping..')
     #return tag based recommendations only
     return tag_res
+
+
+def get_search_based(query, engine):
+    """
+    Function to get results based on search query on website using tag definitions through FuzzyWuzzy(Levenshtein distance metric)
+    """
+    tags = pickle.load(open('product_tags','rb'))
+    matching_tags = process.extract(query, tags, scorer=fuzz.token_set_ratio, limit = 10)
+    display_text = "As your Search includes '" + matching_tags[0][0] +"'"
+    tag_profile = pd.Series(dict(matching_tags), index=tags)
+    tag_profile.fillna(0, inplace=True)
+    tag_profile = tag_profile.apply(lambda x: 5 if x>=90 else (1 if x!=0 else 0))
+    results = get_tag_based_inference(tag_profile, 'productsXtags' , engine , standalone = True, n_recos = 20)
+    return results, display_text
 
 
 def get_user_tag_profile(email, indices, engine):
