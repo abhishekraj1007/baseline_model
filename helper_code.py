@@ -701,8 +701,8 @@ def get_search_based(query, engine):
     display_text = "As your Search includes '" + matching_tags[0][0] +"'"
     tag_profile = pd.Series(dict(matching_tags), index=tags)
     tag_profile.fillna(0, inplace=True)
-    tag_profile = tag_profile.apply(lambda x: 5 if x>=90 else (1 if x!=0 else 0))
-    results = get_tag_based_inference(tag_profile, 'productsXtags' , engine , standalone = True, n_recos = 20)
+    tag_profile = tag_profile.apply(lambda x: 10 if x>=90 else ((5 if x>=60 else 1) if x!=0 else 0))
+    results = get_tag_based_inference(tag_profile, 'productsXtags' , engine , standalone = True, n_recos = 25)
     return results, display_text
 
 
