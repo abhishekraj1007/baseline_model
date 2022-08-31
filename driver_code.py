@@ -74,6 +74,7 @@ def search_products():
 def product_update_check():
     try:
         json_dict = request.json
+        print('---------',json_dict,'-------', sep='\n\n')
         if len(json_dict) == 1:
             update_product(json_dict,engine, delete = True)
         else:
