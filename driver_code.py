@@ -74,21 +74,23 @@ def search_products():
 def product_update_check():
     try:
         json_dict = request.json
-        print('---------',json_dict,'-------', sep='\n\n')
+        print(json_dict)
         if len(json_dict) == 1:
             update_product(json_dict,engine, delete = True)
+            response = 'Product deleted'
         else:
             update_product(json_dict,engine,table_name='products')
             # Updating variants
             for i in range(len(json_dict['variants'])):
                 update_product(json_dict['variants'][i],engine,table_name='product_variants')
-        
+
+            response = 'product_data_modified'
         model_fn(engine, sim_desc_flag=False, crontype=True)
         
         return jsonify({
                             "status" : 200,
                             "message" : 'Success',
-                            "response" : 'Product data modified.'
+                            "response" : response
                         })
 
     except Exception as e:

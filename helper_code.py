@@ -698,7 +698,7 @@ def get_search_based(query, engine):
     """
     tags = pickle.load(open('product_tags','rb'))
     matching_tags = process.extract(query, tags, scorer=fuzz.token_set_ratio, limit = 10)
-    display_text = "As your Search includes '" + matching_tags[0][0] +"'"
+    display_text = f"As your Search includes '{matching_tags[0][0]}' & '{matching_tags[1][0]}'"
     tag_profile = pd.Series(dict(matching_tags), index=tags)
     tag_profile.fillna(0, inplace=True)
     tag_profile = tag_profile.apply(lambda x: 10 if x>=90 else ((5 if x>=60 else 1) if x!=0 else 0))
@@ -816,6 +816,9 @@ def update_product(json_dict, engine, delete = False, table_name = 'products'):
     # Fetching pid for the product to update
     pid = json_dict.pop('id')
 
+    numeric_cols = ['old_inventory_quantity','image_id','compare_at_price','inventory_item_id','position',
+                    'inventory_quantity','grams','weight']
+    
     ## checking if profile exists
     with engine.connect() as con:
         data = con.execute(f"""select "id" from {schema_name}."{table_name}" where "id" = '{pid}'""").fetchone()
@@ -830,13 +833,18 @@ def update_product(json_dict, engine, delete = False, table_name = 'products'):
         else:
             print('Product not found.')
         print('product removed, updating weights...\n')
+        return
 
     if data:
-        print(f'Updating current product id : {data[0]}\n')
+        print(f'Updating current id : {data[0]}')
         s= ''
         for column,value in json_dict.items():
-            temp = '"' + column + '"' + '=' + "'" + str(value).replace("'",'"').replace('None','null').replace('True','true').replace('False','false') + "'" + ","
+            if (column in numeric_cols)  and (not value):
+                temp = '"' + column + '"' + '=' + "'NaN'" + ","
+            else:
+                temp = '"' + column + '"' + '=' + "'" + str(value).replace("'",'"').replace('None','null').replace('True','true').replace('False','false') + "'" + ","
             s+= temp
+        
         s = s[:-1]
         with engine.connect() as con:
             con.execute(f"""
@@ -844,12 +852,16 @@ def update_product(json_dict, engine, delete = False, table_name = 'products'):
             SET {s}
             WHERE "id" = '{pid}'
             """)
-        print('Product info updated.\n')
     else:
         # Insert product as it does not exists
+        print('Adding new product..')
         s = """"""
-        for value in json_dict.values():
-            s+= "'" + str(value).replace('None','null').replace('True','true').replace("'",'"') + "'" + ","
+        for column,value in json_dict.items():
+            if (column in numeric_cols)  and (not value):
+                s+= "'NaN'" + ","
+            else:
+                s+= "'" + str(value).replace("'",'"').replace('None','null').replace('True','true').replace('False','false') + "'" + ","
+    
         s = s[:-1]
 
         with engine.connect() as con:
@@ -857,7 +869,7 @@ def update_product(json_dict, engine, delete = False, table_name = 'products'):
             insert into {schema_name}."{table_name}"
             values ('{pid}', {s} )
             """)
-        print('Product was added..\n')
+        
 
 
 def beautify_recos(recos, engine, payload = None, take_size = False):
