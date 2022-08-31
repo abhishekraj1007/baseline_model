@@ -835,7 +835,7 @@ def update_product(json_dict, engine, delete = False, table_name = 'products'):
         print(f'Updating current product id : {data[0]}\n')
         s= ''
         for column,value in json_dict.items():
-            temp = '"' + column + '"' + '=' + "'" + str(value).replace("'",'"').replace('None','null').replace('True','true') + "'" + ","
+            temp = '"' + column + '"' + '=' + "'" + str(value).replace("'",'"').replace('None','null').replace('True','true').replace('False','false') + "'" + ","
             s+= temp
         s = s[:-1]
         with engine.connect() as con:
