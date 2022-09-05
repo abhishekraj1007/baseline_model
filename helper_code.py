@@ -12,6 +12,7 @@ from random import choices
 import json
 from datetime import datetime
 from fuzzywuzzy import fuzz,process
+from babel.numbers import format_currency
 
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
@@ -872,7 +873,7 @@ def update_product(json_dict, engine, delete = False, table_name = 'products'):
         
 
 
-def beautify_recos(recos, engine, payload = None, take_size = False):
+def beautify_recos(recos, engine, payload = None, take_size = False, format_inr = False):
     """
     returns required fields in dict/json format with the product's handle(S) as input,
     dont forget to input list of products as input.
@@ -905,10 +906,20 @@ def beautify_recos(recos, engine, payload = None, take_size = False):
         except Exception as e:
             print(f'Invalid product found after inference: CHECK! {e}')
             continue
-        if len(set(values)) > 1:
-            price = f'Starts from {int(min(values))}'
+
+        if format_inr:
+            if len(set(values)) > 1:
+                price = int(min(values))
+            else:
+                price = int(values[0])
+            price = format_currency(int(price), 'INR', locale='en_IN')
+            price = 'RS. ' + price[1:]
         else:
-            price = f'{int(values[0])}'
+            if len(set(values)) > 1:
+                price = f'Starts from {int(min(values))}'
+            else:
+                price = f'{int(values[0])}'
+        
         url = base_url + handle
         res.append( { 'Handle':handle, 
         'URL':url, 
