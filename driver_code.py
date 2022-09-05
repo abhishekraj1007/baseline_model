@@ -57,7 +57,7 @@ def search_products():
     try:
         query = request.args["query"]
         results, display_text = get_search_based(query, engine)
-        beautified_results = beautify_recos(recos = results, engine=engine)[:8]
+        beautified_results = beautify_recos(recos = results, engine=engine, format_inr = True)[:8]
         return jsonify( {
                         "status" : 200,
                         "message" : 'Success',
@@ -74,7 +74,6 @@ def search_products():
 def product_update_check():
     try:
         json_dict = request.json
-        print(json_dict)
         if len(json_dict) == 1:
             update_product(json_dict,engine, delete = True)
             response = 'Product deleted'
@@ -183,7 +182,7 @@ def cart():
         product_handle = title2handle[product_title]
         
         results = get_similar_cart_items(email, product_handle, engine, similarity_matrix='sim')
-        beautified_results = beautify_recos(recos = results, engine=engine)
+        beautified_results = beautify_recos(recos = results, engine=engine, format_inr = True)
         return jsonify( {
                         "status" : 200,
                         "message" : 'Success',
@@ -218,7 +217,7 @@ def recommend():
             results = recommend_without_tags(email, product_handle , engine, reco_count = 12)
             # set display text as normal recommendation engine is used
             display_text = "We Think You'd Like these Lea Looks"
-            beautified_results = beautify_recos(recos = results, engine=engine)
+            beautified_results = beautify_recos(recos = results, engine=engine, format_inr = True)
         else:
             print('User tag profile found')
             ## Getting payload from unproc_json data
@@ -226,7 +225,7 @@ def recommend():
             with engine.connect() as con:
                 unproc_data = con.execute(f"""select "unproc_data" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
             payload = json.loads(unproc_data[0])
-            beautified_results = beautify_recos(recos = results, engine=engine,payload = payload, take_size =True)
+            beautified_results = beautify_recos(recos = results, engine=engine,payload = payload, take_size =True, format_inr = True)
         
         return jsonify( {
                         "status" : 200,
