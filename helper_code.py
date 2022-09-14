@@ -390,11 +390,6 @@ def recommend_with_tags(user, engine, reco_count):
     
     #create key to be accessed from custom tags_to_question mappings
     key = (random_tag,'pos' if non_zero_attr[random_tag] > 0 else 'neg')
-    print(key)
-    try:
-        print(tags_to_question[key])
-    except:
-        print(tags_to_question)
     # to be displayed on backend
     display_text = tags_to_question[key][0]
     #selecting 2nd and third position for tags and their weights for profile creation for custom recommendation part
