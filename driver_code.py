@@ -1,6 +1,6 @@
 from helper_code import beautify_recos, filter_results, recommend_without_tags, recommend_with_tags, get_similar_cart_items
-from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed, beautify_recos
-from helper_code import model_fn, filter_results
+from helper_code import  create_profile, store_user, get_tag_based_inference, store_user_unprocessed
+from helper_code import model_fn
 from helper_code import cronjob
 from helper_code import update_product
 from helper_code import get_search_based
@@ -200,6 +200,8 @@ def recommend():
         email = request.args.get("email",'new@user')
         if email == '':
             email = 'new@user'
+        email = email.lower()
+        
         product_title = request.args['product_title']
         title2handle = pickle.load(open('title2handle', 'rb'))
         product_handle = title2handle[product_title]
@@ -249,7 +251,8 @@ def personalize():
         data_to_store = json.loads(json.dumps(copy.deepcopy(data)).replace("'","''"))
 
         email = data['email']['value']
-        
+        email = email.lower()
+
         tag_profile = create_profile(data, product_tags_filename='product_tags')
         
         #Storing processed user profile
