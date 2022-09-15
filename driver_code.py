@@ -56,8 +56,22 @@ def get_test():
 def search_products():
     try:
         query = request.args["query"]
+        email = request.args.get("email",'new@user')
+        if email == '':
+            email = 'new@user'
+        email = email.lower()
+
+        table_name = 'tags_profile_unproc'
+        with engine.connect() as con:
+            unproc_data = con.execute(f"""select "unproc_data" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
+        if unproc_data:
+            payload = json.loads(unproc_data[0])
+        else:
+            payload = []
+
         results, display_text = get_search_based(query, engine)
-        beautified_results = beautify_recos(recos = results, engine=engine, format_inr = True)[:8]
+        beautified_results = beautify_recos(recos = results, engine=engine,payload = payload, take_size =True, format_inr = True)
+
         return jsonify( {
                         "status" : 200,
                         "message" : 'Success',
