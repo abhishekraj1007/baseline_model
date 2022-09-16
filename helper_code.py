@@ -76,8 +76,8 @@ tags_to_question = {
 ('strapless','pos'):('Because you like to highlight your \n"Collarbones"',['offshoulder','strapless'],[1,1]),
 
 ('sleeves','pos'):('Because you like \n"Sleeves"',['sleeves'],1),
-('bodycon','neg'):('Because you like \n"Bodycon"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
-('croptop','neg'):('Because you like \n"CropTop"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('bodycon','neg'):('You may also like',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
+('croptop','neg'):('You may also like',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
 ('highwaist','pos'):('Because you like \n"HighWaist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
 ('skater','pos'):('Because you like \n"Skater"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
 ('shift','pos'):('Because you like \n"Shift"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
@@ -87,8 +87,8 @@ tags_to_question = {
 ('pants','pos'):('Because you like \n"Pants"',['midi','gown','pants','maxi'],[1,1,1,1]),
 ('maxi','pos'):('Because you like \n"Maxi"',['midi','gown','pants','maxi'],[1,1,1,1]),
 ('backless','neg'):('You may also like',['backless'],[-1]),
-('strapless','neg'):('Because you like \n"Strapless"',['offshoulder','strapless'],[-1,-1]),
-('offshoulder','neg'):('Because you like \n"off-shoulder"',['offshoulder','strapless'],[-1,-1]),
+('strapless','neg'):('You may also like',['offshoulder','strapless'],[-1,-1]),
+('offshoulder','neg'):('You may also like',['offshoulder','strapless'],[-1,-1]),
 
 ('petite','pos'):("Because you're Petite in height",['petite'],[1]),
 ('average','pos'):("Because you're Average in height",['average'],[1]),
@@ -887,7 +887,7 @@ def beautify_recos(recos, engine, payload = None, take_size = False, format_inr 
         try:
             size = get_size(payload)
         except:
-            size = 'NA'
+            size = ''
     else:
         size = ''
 
