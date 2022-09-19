@@ -72,8 +72,9 @@ tags_to_question = {
 ('croptop','pos'):('Because you like to highlight your \n"Waist"',['corset','bodycon','croptop'],[1,1,1]),
 ('mini','pos'):('Because you like to highlight your \n"Legs"',['mini'],[1]),
 ('backless','pos'):('Because you like to highlight your \n"Back"',['backless'],[1]),
-('offshoulder','pos'):('Because you like to highlight your \n"Collarbones"',['offshoulder','strapless'],[1,1]),
-('strapless','pos'):('Because you like to highlight your \n"Collarbones"',['offshoulder','strapless'],[1,1]),
+('skater','pos'):('Because you like to highlight your \n"Stomach/Hips"',['skater','longline','peplum'],[1,1,1]),
+('longline','pos'):('Because you like to highlight your \n"Stomach/Hips"',['skater','longline','peplum'],[1,1,1]),
+('peplum','pos'):('Because you like to highlight your \n"Stomach/Hips"',['skater','longline','peplum'],[1,1,1]),
 
 ('sleeves','pos'):('Because you like \n"Sleeves"',['sleeves'],1),
 ('bodycon','neg'):('You may also like',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
@@ -87,8 +88,9 @@ tags_to_question = {
 ('pants','pos'):('Because you like \n"Pants"',['midi','gown','pants','maxi'],[1,1,1,1]),
 ('maxi','pos'):('Because you like \n"Maxi"',['midi','gown','pants','maxi'],[1,1,1,1]),
 ('backless','neg'):('You may also like',['backless'],[-1]),
-('strapless','neg'):('You may also like',['offshoulder','strapless'],[-1,-1]),
-('offshoulder','neg'):('You may also like',['offshoulder','strapless'],[-1,-1]),
+('skater','neg'):('You may also like',['skater','longline','peplum'],[-1,-1,-1]),
+('longline','neg'):('You may also like',['skater','longline','peplum'],[-1,-1,-1]),
+('peplum','neg'):('You may also like',['skater','longline','peplum'],[-1,-1,-1]),
 
 ('petite','pos'):("Because you're Petite in height",['petite'],[1]),
 ('average','pos'):("Because you're Average in height",['average'],[1]),
@@ -608,7 +610,8 @@ def create_profile(data, product_tags_filename = 'product_tags'):
                         'Waist':{'High Waist':1, 'Skater':1, 'Shift':1, 'Slip':1, "Bodycon":-2, "Crop Top":-2},
                          'Legs': {'Midi':1, 'Gown':1, 'Pants':1, 'Maxi':1, 'Gown':1},
                          'Back':{'Backless':-2},
-                         'Collarbones':{"Off-Shoulder":-2, "Strapless":-2}}
+                         'Stomach/Hips':{"Skater":-2, "Longline":-2, "Peplum":-2}
+                         }
     
     #Questions and corresponding weights of thier tags
     body_tags = {'Bodies':2, 'accentuate':4, 'uncomfortable': 4, 'height':1, 'colour palettes':2,
