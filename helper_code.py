@@ -207,6 +207,7 @@ def process_products(engine, sim_desc_flag = True, crontype = False):
             #check if tags got changed and we need to restructure the tag_array
             change_in_tags = set.symmetric_difference( set(product_tags), set(old_tags))
             if len(change_in_tags) > 0:
+                print('calling update tag schema function...')
                 update_tag_schema(engine)
             else:
                 print('No tags were updated at croncheck.')
