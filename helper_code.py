@@ -167,7 +167,7 @@ def process_products(engine, sim_desc_flag = True, crontype = False):
     #drop rows having nan values as tags after the .explode step from list->rows
     products.dropna(subset=['tags'], inplace = True)
 
-    products.tags = products.tags.apply(lambda x: ''.join( item.lower() for item in x.replace('-','').replace("'",'').split() ))
+    products.tags = products.tags.apply(lambda x: ''.join( item.lower() for item in x.replace('-','').replace("'",'').replace('"','').split() ))
     products['count'] = 1
     products = products.pivot_table('count', ['handle'],'tags')
     products.fillna(0, inplace = True)
@@ -633,7 +633,7 @@ def create_profile(data, product_tags_filename = 'product_tags'):
                 
 #             print('temp',temp)
             tags.update(dict( (
-                ''.join( item.lower() for item in tag.replace('-','').replace("'",'').split() ),weight) for tag in temp ))
+                ''.join( item.lower() for item in tag.replace('-','').replace("'",'').replace('"','').split() ),weight) for tag in temp ))
             
 #             print(tags)
         else:
@@ -646,7 +646,7 @@ def create_profile(data, product_tags_filename = 'product_tags'):
                 
                 # VERIFY tags coming from payload in the end 
                 tags.update(dict( (
-                    ''.join( item.lower() for item in key.replace('-','').replace("'",'').split() ), value * weight) for key,value in value.items() ))
+                    ''.join( item.lower() for item in key.replace('-','').replace("'",'').replace('"','').split() ), value * weight) for key,value in value.items() ))
 #             print('uncomfortable', values, tags)
     #using product_tags as columns/index of the tag profile
     tag_profile = pd.Series(tags, index = product_tags)
