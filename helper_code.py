@@ -680,6 +680,9 @@ def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None 
             title2handle = pickle.load(open(title2handle, 'rb'))
             #checking for invalid styles selection from hardcoded data on frontend
             ids = list( map( title2handle.get,filter(lambda x: True if x in title2handle.keys() else False, ids) ) )
+            #return actual results when no IDs/Styles are selected
+            if len(ids) == 0:
+                return tag_res
             #get similar products from the selected product styles by the user on popup page
             res = []
             size_each = max(n_recos//len(ids) - 4, 5)
