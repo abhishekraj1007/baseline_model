@@ -167,7 +167,13 @@ def process_products(engine, sim_desc_flag = True, crontype = False):
     #drop rows having nan values as tags after the .explode step from list->rows
     products.dropna(subset=['tags'], inplace = True)
 
+    unprocessed_tags = products.tags.values.tolist()
     products.tags = products.tags.apply(lambda x: ''.join( item.lower() for item in x.replace('-','').replace("'",'').replace('"','').split() ))
+    processed_tags = products.tags
+    # dumping product tags to be displayed exactly as it is in /search api
+    tag_disp_mapping = dict(zip(processed_tags,unprocessed_tags))
+    pickle.dump(tag_disp_mapping,open('tag_disp_mapping','wb'))
+
     products['count'] = 1
     products = products.pivot_table('count', ['handle'],'tags')
     products.fillna(0, inplace = True)
@@ -705,8 +711,14 @@ def get_search_based(query, engine):
     Function to get results based on search query on website using tag definitions through FuzzyWuzzy(Levenshtein distance metric)
     """
     tags = pickle.load(open('product_tags','rb'))
+    tag_disp_mapping = pickle.load(open('tag_disp_mapping','rb'))
+
     matching_tags = process.extract(query, tags, scorer=fuzz.token_set_ratio, limit = 10)
-    display_text = f"As your Search includes '{matching_tags[0][0]}' & '{matching_tags[1][0]}'"
+    try:
+        display_text = f"As your Search includes '{tag_disp_mapping[matching_tags[0][0]].title()}' & '{tag_disp_mapping[matching_tags[1][0]].title()}'"
+    except:
+        print('Matching tag not found in tag_disp_mapping file, CHeck!')
+        display_text = f"Similar to your search"
     tag_profile = pd.Series(dict(matching_tags), index=tags)
     tag_profile.fillna(0, inplace=True)
     tag_profile = tag_profile.apply(lambda x: 10 if x>=90 else ((5 if x>=60 else 1) if x!=0 else 0))
