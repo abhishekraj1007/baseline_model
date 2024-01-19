@@ -176,7 +176,7 @@ def process_products(engine, sim_desc_flag = True, crontype = False):
 
     products['count'] = 1
     products = products.pivot_table('count', ['handle'],'tags')
-    products.fillna(0, inplace = True)
+    products = products.fillna(0).astype(int)
     ## dropping products list, Tags list, title2handle dict and saving productsXtags into postgre db
     product_names = products.index.to_list()
     product_tags = products.columns.to_list()
