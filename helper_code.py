@@ -2,7 +2,6 @@
 ## Check for if correct results and order is being returned after sampling results from the subresults
 
 import warnings
-
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import numpy as np
