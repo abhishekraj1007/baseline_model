@@ -184,7 +184,6 @@ def process_products(engine, sim_desc_flag = True, crontype = False):
     pickle.dump(title2handle, open('title2handle','wb'))
     products.to_sql(name ='productsXtags', con=engine, index = True, schema = schema_name, if_exists = 'replace' )
     
-
     #check if table does not exists, then create new
     with engine.connect() as con:
         table_proc = con.execute(f"""SELECT to_regclass('{schema_name}.tags_profile')""").fetchone()
