@@ -210,49 +210,49 @@ def cart():
 
 @app.route('/recommend',methods=['GET'])
 def recommend():
-    # try:
-    email = request.args.get("email",'new@user')
-    if email == '':
-        email = 'new@user'
-    email = email.lower()
-    
-    product_title = request.args['product_title']
-    title2handle = pickle.load(open('title2handle', 'rb'))
-    product_handle = title2handle[product_title]
+    try:
+        email = request.args.get("email",'new@user')
+        if email == '':
+            email = 'new@user'
+        email = email.lower()
+        
+        product_title = request.args['product_title']
+        title2handle = pickle.load(open('title2handle', 'rb'))
+        product_handle = title2handle[product_title]
 
-    #initialize results as -1 to avoid adding slow exception checking
-    results = -1
+        #initialize results as -1 to avoid adding slow exception checking
+        results = -1
 
-    user = pd.read_sql_query(f"""select * from {schema_name}."tags_profile" where "email" = '{email}'""",con=engine).set_index('email', drop = True)
-    if not user.empty:
-        user = user.iloc[0]
-        results,display_text = recommend_with_tags(user, engine, reco_count=12)
+        user = pd.read_sql_query(f"""select * from {schema_name}."tags_profile" where "email" = '{email}'""",con=engine).set_index('email', drop = True)
+        if not user.empty:
+            user = user.iloc[0]
+            results,display_text = recommend_with_tags(user, engine, reco_count=12)
 
-    if results == -1:
-        print('User tag profile not found')
-        results = recommend_without_tags(email, product_handle , engine, reco_count = 12)
-        # set display text as normal recommendation engine is used
-        display_text = "We Think You'd Like these Lea Looks"
-        beautified_results = beautify_recos(recos = results, engine=engine, format_inr = True)
-    else:
-        print('User tag profile found')
-        ## Getting payload from unproc_json data
-        table_name = 'tags_profile_unproc'
-        with engine.connect() as con:
-            unproc_data = con.execute(f"""select "unproc_data" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
-        payload = json.loads(unproc_data[0])
-        beautified_results = beautify_recos(recos = results, engine=engine,payload = payload, take_size =True, format_inr = True)
+        if results == -1:
+            print('User tag profile not found')
+            results = recommend_without_tags(email, product_handle , engine, reco_count = 12)
+            # set display text as normal recommendation engine is used
+            display_text = "We Think You'd Like these Lea Looks"
+            beautified_results = beautify_recos(recos = results, engine=engine, format_inr = True)
+        else:
+            print('User tag profile found')
+            ## Getting payload from unproc_json data
+            table_name = 'tags_profile_unproc'
+            with engine.connect() as con:
+                unproc_data = con.execute(f"""select "unproc_data" from {schema_name}."{table_name}" where "email" = '{email}'""").fetchone()
+            payload = json.loads(unproc_data[0])
+            beautified_results = beautify_recos(recos = results, engine=engine,payload = payload, take_size =True, format_inr = True)
+        
+        return jsonify( {
+                        "status" : 200,
+                        "message" : 'Success',
+                        "response" : {'beautified_results':beautified_results,'display_text':display_text} } )
     
-    return jsonify( {
-                    "status" : 200,
-                    "message" : 'Success',
-                    "response" : {'beautified_results':beautified_results,'display_text':display_text} } )
-    
-    # except Exception as e:
-    #     return jsonify( {
-    #                     "status" : 500,
-    #                     "message" : [repr(e),str(e)],
-    #                     "response" : None } )
+    except Exception as e:
+        return jsonify( {
+                        "status" : 500,
+                        "message" : [repr(e),str(e)],
+                        "response" : None } )
 
 
 @app.route('/personalize',methods=['POST'])
@@ -302,7 +302,7 @@ def personalize():
                         "status" : 500,
                         "message" : [repr(e),str(e)],
                         "response" : None} )
-    
+
 
 if __name__ == '__main__':
     try:
