@@ -1,1 +1,10 @@
 .venv
+venv
+avg_item_ratings
+product_names
+product_tags
+title2handle
+__pycache__/helper_code.cpython-310.pyc
+ga_top_selling
+tag_disp_mapping
+debug.py
