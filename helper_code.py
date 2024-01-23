@@ -2,7 +2,6 @@
 ## Check for if correct results and order is being returned after sampling results from the subresults
 
 import warnings
-
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import numpy as np
@@ -76,7 +75,7 @@ tags_to_question = {
 ('longline','pos'):('Because you like to highlight your \n"Stomach/Hips"',['skater','longline','peplum'],[1,1,1]),
 ('peplum','pos'):('Because you like to highlight your \n"Stomach/Hips"',['skater','longline','peplum'],[1,1,1]),
 
-('sleeves','pos'):('Because you like \n"Sleeves"',['sleeves'],1),
+('sleeves','pos'):('Because you like \n"Sleeves"',['sleeves'], [1]),
 ('bodycon','neg'):('You may also like',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
 ('croptop','neg'):('You may also like',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
 ('highwaist','pos'):('Because you like \n"HighWaist"',['highwaist','skater','shift','slip','bodycon','croptop'],[1,1,1,1,-1,-1]),
@@ -130,7 +129,6 @@ tags_to_question = {
 
 schema_name = 'recommendmodel'
 
-
 def process_products(engine, sim_desc_flag = True, crontype = False):
     """
     Function to initialize things and will be used for retraining, other purpose it serves:
@@ -176,7 +174,7 @@ def process_products(engine, sim_desc_flag = True, crontype = False):
 
     products['count'] = 1
     products = products.pivot_table('count', ['handle'],'tags')
-    products = products.fillna(0).astype(int)
+    products = products.fillna(0).astype('int8')
     ## dropping products list, Tags list, title2handle dict and saving productsXtags into postgre db
     product_names = products.index.to_list()
     product_tags = products.columns.to_list()
@@ -192,7 +190,14 @@ def process_products(engine, sim_desc_flag = True, crontype = False):
         print(f'Setting up schema for processed user profiles\n')
         #pending check when to replace/append/delete
         temp = ['dummy@dummy'] + [0] * len(product_tags)
-        empty_tag_profile = pd.DataFrame([temp], columns=['email'] + product_tags)
+
+        # Create the DataFrame with data types specified
+        data_types = {'email': str}
+        for tag in product_tags:
+            data_types[tag] = 'int8'
+
+        ## added type casting to effecient datatype, check columns or data type support if creates issues in future.
+        empty_tag_profile = pd.DataFrame([temp], columns=['email'] + product_tags).astype(data_types)
         empty_tag_profile.to_sql('tags_profile', engine, index = False, schema = schema_name, if_exists = 'replace')
         
         with engine.connect() as con:
@@ -236,11 +241,12 @@ def process_products(engine, sim_desc_flag = True, crontype = False):
         with engine.connect() as con:
             con.execute(f"""ALTER TABLE {schema_name}."tags_profile_unproc" ADD PRIMARY KEY ("email")""")
     else:
+        ## note that the unproc or unprocessed tag profile will keep growing. Find a strategy to limit that if needed.
         print('tags_profile_Unproc table already exists.')
 
     #now save this file to let the model run normally
     pickle.dump(product_tags, open('product_tags','wb'))
-        
+
 
 def init_model(engine):
     #Read Orders file
@@ -347,6 +353,9 @@ def init_model(engine):
             sim[col][row] = res
     
     sim = pd.DataFrame(sim, columns=ids, index = ids)
+    ## If this line causes issue in future, try to check the values first in sim matrix,
+    ## if the values can be reduced to three decimal values then it should be done with datatype changed,
+    ## otherwise it may give size exceed issue for a single sql row.
     sim.to_sql('sim', engine, index = True, schema = schema_name, if_exists = 'replace' )
     print('Training Corr matrix finished,\nSaving weights.\n')
 
@@ -363,8 +372,10 @@ def update_tag_schema(engine):
         print('Something went wrong, Tags profile is empty')
         return
 
+    ## to list the difference in tags for the products
     difference_tags = list(set(tag_profile.columns) - set(product_tags))
-    print('These Tags were outdated: ',difference_tags)
+    added_tags = list(set(product_tags) - set(tag_profile))
+    print(f'These Tags were outdated: {difference_tags} and\nthese tags were added: {added_tags}')
     tag_profile.drop(difference_tags, axis = 1, inplace = True)
 
     res = []
@@ -374,7 +385,7 @@ def update_tag_schema(engine):
         res.append(values)
 
     df = pd.DataFrame(res,columns=['email']+ product_tags)
-    df.iloc[:,1:] = df.iloc[:,1:].fillna(0).astype(int)
+    df.iloc[:,1:] = df.iloc[:,1:].fillna(0).astype('int8')
 
     print(f'Setting up Updated Schema as Tags data got changed\n')
 
@@ -382,6 +393,7 @@ def update_tag_schema(engine):
 
     with engine.connect() as con:
         con.execute(f"""ALTER TABLE {schema_name}."tags_profile" ADD PRIMARY KEY ("email")""")
+    print('tags profile table updated successfully.')
 
 
 def recommend_with_tags(user, engine, reco_count):
@@ -398,9 +410,10 @@ def recommend_with_tags(user, engine, reco_count):
         return -1, ''
     
     #create key to be accessed from custom tags_to_question mappings
-    key = (random_tag,'pos' if non_zero_attr[random_tag] > 0 else 'neg')
+    key = (random_tag, 'pos' if non_zero_attr[random_tag] > 0 else 'neg')
     # to be displayed on backend
     display_text = tags_to_question[key][0]
+
     #selecting 2nd and third position for tags and their weights for profile creation for custom recommendation part
     tags = dict(zip(tags_to_question[key][1], tags_to_question[key][2]))
 
@@ -668,6 +681,7 @@ def get_tags_sim(tag_profile, tag_array, n):
     #notice that order has been reversed
     ids = (-cosine_similarity( tag_array, [tag_profile])).argsort(axis = 0)[:n].flatten()
     
+    ## alternative to the above
 #     print(cosine_similarity( tag_array, [tag_profile]) , cosine_similarity( tag_array, [tag_profile]).argsort(axis = 0).flatten()[:-n:-1] , ids)
     
     return tag_array.index[ids].tolist()
@@ -676,6 +690,7 @@ def get_tags_sim(tag_profile, tag_array, n):
 def get_tag_based_inference(tag_profile, tag_array, engine, title2handle = None , ids = None, standalone = False, n_recos = 15):
     """
     note that product ids must be in list format
+    standalone feature is for Personalized quiz results on the app, Where products too are used with user profile
     """
     tag_array = pd.read_sql_query(f'SELECT * FROM {schema_name}."{tag_array}"',con=engine).set_index('handle', drop = True)
 

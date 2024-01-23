@@ -302,7 +302,7 @@ def personalize():
                         "status" : 500,
                         "message" : [repr(e),str(e)],
                         "response" : None} )
-    
+
 
 if __name__ == '__main__':
     try:
